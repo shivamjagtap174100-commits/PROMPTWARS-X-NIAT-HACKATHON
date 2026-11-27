@@ -1,0 +1,227 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    /* Primary Pine Ramp */
+    --pg-primary: #173D30;
+    --pg-primary-deep: #102D24;
+    --pg-primary-muted: #24543E;
+
+    /* Background Surfaces (Chalk & Pine) */
+    --pg-bg: #F5F3EC;
+    --pg-surface: #FBFAF6;
+    --pg-surface-secondary: #E9ECE5;
+    --pg-surface-warm: #FBFAF6;
+    --pg-surface-elevated: #FFFFFF;
+
+    /* Ink & Muted Typography */
+    --pg-text-primary: #242923;
+    --pg-text-secondary: #4B534A;
+    --pg-text-muted: #747B72;
+
+    /* Swiss Accents */
+    --pg-sage: #829782;
+    --pg-soft-sage: #DDE6DA;
+    --pg-brass: #D6B879;
+
+    /* Subtle Structural Rules */
+    --pg-border: #D9DFD8;
+    --pg-border-strong: #BAC3B9;
+
+    /* Semantic Status */
+    --pg-success: #367A55;
+    --pg-warning: #B88735;
+    --pg-error: #B64B43;
+
+    /* Legacy compatibility aliases */
+    --pg-forest: #173D30;
+    --pg-emerald: #367A55;
+
+    --pg-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color-scheme: light;
+  }
+
+  html.dark {
+    --pg-primary: #A3C1A5;
+    --pg-primary-deep: #173D30;
+    --pg-primary-muted: #24543E;
+
+    --pg-bg: #111713;
+    --pg-surface: #1B241F;
+    --pg-surface-secondary: #232D26;
+    --pg-surface-warm: #1B241F;
+    --pg-surface-elevated: #232D26;
+
+    --pg-text-primary: #F1F1E9;
+    --pg-text-secondary: #C5CCC5;
+    --pg-text-muted: #A5AEA5;
+
+    --pg-sage: #829782;
+    --pg-soft-sage: #233128;
+    --pg-brass: #D6B879;
+
+    --pg-border: #344239;
+    --pg-border-strong: #47594D;
+
+    --pg-success: #5DA179;
+    --pg-warning: #D6B879;
+    --pg-error: #DF7B73;
+
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--pg-bg);
+    color: var(--pg-text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    margin: 0;
+    overflow-x: hidden;
+    font-weight: 400;
+    line-height: 1.55;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  button,
+  label,
+  nav {
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  p,
+  input,
+  select,
+  textarea,
+  table,
+  td,
+  th {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  code,
+  pre,
+  kbd,
+  .font-mono {
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  }
+
+  *:focus-visible {
+    outline: 2px solid #173D30;
+    outline-offset: 2px;
+  }
+
+  html.dark *:focus-visible {
+    outline-color: #A3C1A5;
+  }
+}
+
+/* Swiss Precision Surfaces (Clean solid tones, hairline rules, zero excessive gradients) */
+.pg-dark-console {
+  background-color: #102D24;
+  color: #F1F1E9;
+}
+
+html.dark .pg-dark-console {
+  background-color: #161F1A;
+  color: #F1F1E9;
+}
+
+.pg-editorial-paper {
+  background-color: var(--pg-surface);
+}
+
+.pg-action-primary {
+  background-color: #173D30;
+  color: #FBFAF6;
+  transition: background-color 140ms var(--pg-ease), transform 110ms var(--pg-ease), border-color 140ms var(--pg-ease);
+}
+
+.pg-action-primary:hover:not(:disabled) {
+  background-color: #102D24;
+}
+
+.pg-action-primary:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+html.dark .pg-action-primary {
+  background-color: #A3C1A5;
+  color: #111713;
+}
+
+html.dark .pg-action-primary:hover:not(:disabled) {
+  background-color: #DDE6DA;
+  color: #111713;
+}
+
+.pg-shadow-card {
+  box-shadow: 0 1px 2px rgba(16, 45, 36, 0.04);
+}
+
+html.dark .pg-shadow-card {
+  box-shadow: none;
+}
+
+.pg-shadow-modal {
+  box-shadow: 0 12px 32px rgba(16, 45, 36, 0.14);
+}
+
+html.dark .pg-shadow-modal {
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+}
+
+/* Restrained entrance transition */
+@keyframes pg-fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.pg-enter {
+  animation: pg-fade-rise 220ms var(--pg-ease) both;
+}
+
+/* Minimal Swiss hairline scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(116, 123, 114, 0.35);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(116, 123, 114, 0.55);
+}
+
+/* Reduced-motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
