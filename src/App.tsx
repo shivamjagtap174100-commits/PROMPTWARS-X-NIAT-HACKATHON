@@ -18,7 +18,7 @@ import { useTheme } from './hooks/useTheme';
 
 export function App() {
   const { theme, toggleTheme } = useTheme('light');
-  const { route, navigate } = useAppRoute();
+  const { route, navigate, replaceRoute } = useAppRoute();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const globalUploadRef = useRef<HTMLInputElement>(null);
@@ -26,12 +26,12 @@ export function App() {
   const auth = useAuthSession();
   const sanitization = useSanitizationSession(auth.isAuthenticated);
 
-  // Enforce /login URL cleanly when unauthenticated
+  // Enforce /login URL cleanly when unauthenticated (preserving base subpath on GitHub Pages)
   useEffect(() => {
-    if (!auth.isAuthenticated && typeof window !== 'undefined' && window.location.pathname !== '/login') {
-      window.history.replaceState({}, '', '/login');
+    if (!auth.isAuthenticated) {
+      replaceRoute('/login');
     }
-  }, [auth.isAuthenticated]);
+  }, [auth.isAuthenticated, replaceRoute]);
 
   // Global Ctrl/Cmd+K shortcut strictly when authenticated
   useEffect(() => {

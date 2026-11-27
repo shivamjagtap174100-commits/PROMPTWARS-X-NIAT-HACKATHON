@@ -2,8 +2,26 @@ import { useCallback, useEffect, useState } from 'react';
 import type { AppRoute } from '../types/privacy';
 import { readStoredJson, STORAGE_KEYS, writeStoredJson } from '../utils/localPersistence';
 
+const REPO_BASE = (() => {
+  const raw = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+  return raw === '/' ? '' : raw;
+})();
+
+function stripBase(pathname: string): string {
+  if (REPO_BASE && pathname.startsWith(REPO_BASE)) {
+    const remainder = pathname.slice(REPO_BASE.length);
+    return remainder.startsWith('/') ? remainder : `/${remainder}`;
+  }
+  return pathname;
+}
+
+export function buildAppUrl(route: AppRoute): string {
+  if (!REPO_BASE) return route;
+  return route === '/' ? `${REPO_BASE}/` : `${REPO_BASE}${route}`;
+}
+
 function normalizePathname(pathname: string): AppRoute {
-  const cleaned = pathname.replace(/\/+$/, '') || '/';
+  const cleaned = stripBase(pathname).replace(/\/+$/, '') || '/';
   if (cleaned === '/login') return '/login';
   if (cleaned === '/workspace') return '/workspace';
   if (cleaned === '/documents') return '/documents';
@@ -38,8 +56,9 @@ export function useAppRoute() {
 
   const navigate = useCallback((nextRoute: AppRoute) => {
     const normalized = normalizePathname(nextRoute);
-    if (typeof window !== 'undefined' && window.location.pathname !== normalized) {
-      window.history.pushState({}, '', normalized);
+    const targetUrl = buildAppUrl(normalized);
+    if (typeof window !== 'undefined' && window.location.pathname !== targetUrl) {
+      window.history.pushState({}, '', targetUrl);
       window.scrollTo({ top: 0, behavior: 'auto' });
     }
     setRoute(normalized);
@@ -48,5 +67,17 @@ export function useAppRoute() {
     }
   }, []);
 
-  return { route, navigate };
+  const replaceRoute = useCallback((nextRoute: AppRoute) => {
+    const normalized = normalizePathname(nextRoute);
+    const targetUrl = buildAppUrl(normalized);
+    if (typeof window !== 'undefined' && window.location.pathname !== targetUrl) {
+      window.history.replaceState({}, '', targetUrl);
+    }
+    setRoute(normalized);
+    if (normalized !== '/login') {
+      writeStoredJson(STORAGE_KEYS.ROUTE, normalized);
+    }
+  }, []);
+
+  return { route, navigate, replaceRoute };
 }
