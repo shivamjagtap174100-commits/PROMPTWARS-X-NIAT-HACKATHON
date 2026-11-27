@@ -1,5 +1,7 @@
 import type {
   CategoryCounts,
+  CustomLabelsMap,
+  CustomRuleDefinition,
   DetectionMatch,
   DiffSegment,
   EnabledCategoriesMap,
@@ -7,6 +9,7 @@ import type {
   RedactedReplacement,
   RedactionMode,
   SanitizationResult,
+  SensitivityLevel,
 } from '../types/privacy';
 import { buildDiffSegments } from './comparison/diffSegments';
 import { DEFAULT_ENABLED_CATEGORIES, detectAllEntities } from './detectors/detectAll';
@@ -14,6 +17,7 @@ import { escapeCsvField, parseCsv, serializeCsv } from './parsing/csvParser';
 import { validateTextContent } from './parsing/fileValidation';
 import { PseudonymizationManager } from './redaction/pseudonymManager';
 import { redactTextWithMatches } from './redaction/redactDocument';
+import { computeRiskAssessment } from './riskAnalyzer';
 
 function createEmptyCounts(): CategoryCounts {
   return {
@@ -24,6 +28,13 @@ function createEmptyCounts(): CategoryCounts {
     PAN: 0,
     AADHAAR: 0,
     CREDIT_CARD: 0,
+    PERSON_NAME: 0,
+    DOB_AGE: 0,
+    GOV_ID: 0,
+    FINANCIAL_ID: 0,
+    DIGITAL_SECRET: 0,
+    LOCATION_ADDRESS: 0,
+    CUSTOM: 0,
   };
 }
 
@@ -46,24 +57,33 @@ function countActiveMatches(
   return { counts, excludedCount };
 }
 
+export interface PipelineOptions {
+  sensitivity?: SensitivityLevel;
+  customRules?: CustomRuleDefinition[];
+  customLabels?: CustomLabelsMap;
+}
+
 export function processTextDocument(
   inputText: string,
   mode: RedactionMode,
   excludedIdsList: string[] = [],
   usedWorker = false,
-  enabledCategories: EnabledCategoriesMap = DEFAULT_ENABLED_CATEGORIES
+  enabledCategories: EnabledCategoriesMap = DEFAULT_ENABLED_CATEGORIES,
+  options: PipelineOptions = {}
 ): SanitizationResult {
   const startedAt = performance.now();
   const validationError = validateTextContent(inputText);
   if (validationError) {
+    const emptyCounts = createEmptyCounts();
     return {
       sanitizedText: '',
       matches: [],
       replacements: [],
       originalSegments: [],
       sanitizedSegments: [],
-      counts: createEmptyCounts(),
+      counts: emptyCounts,
       excludedCount: 0,
+      risk: computeRiskAssessment([], new Set(), emptyCounts),
       durationMs: Math.max(0.1, Number((performance.now() - startedAt).toFixed(2))),
       usedWorker,
       fileKind: 'text',
@@ -74,13 +94,17 @@ export function processTextDocument(
   const excludedSet = new Set(excludedIdsList);
   const pseudonymManager = new PseudonymizationManager();
 
-  const matches = detectAllEntities(inputText, 'txt', enabledCategories);
+  const matches = detectAllEntities(inputText, 'txt', enabledCategories, {
+    sensitivity: options.sensitivity,
+    customRules: options.customRules,
+  });
   const { sanitizedText, replacements } = redactTextWithMatches(
     inputText,
     matches,
     mode,
     excludedSet,
-    pseudonymManager
+    pseudonymManager,
+    options.customLabels
   );
 
   const { originalSegments, sanitizedSegments } = buildDiffSegments(
@@ -91,6 +115,7 @@ export function processTextDocument(
   );
 
   const { counts, excludedCount } = countActiveMatches(matches, excludedSet);
+  const risk = computeRiskAssessment(matches, excludedSet, counts);
   const durationMs = Math.max(0.1, Number((performance.now() - startedAt).toFixed(2)));
 
   return {
@@ -101,6 +126,7 @@ export function processTextDocument(
     sanitizedSegments,
     counts,
     excludedCount,
+    risk,
     durationMs,
     usedWorker,
     fileKind: 'text',
@@ -113,19 +139,22 @@ export function processCsvDocument(
   excludedIdsList: string[] = [],
   preserveCsvHeader = true,
   usedWorker = false,
-  enabledCategories: EnabledCategoriesMap = DEFAULT_ENABLED_CATEGORIES
+  enabledCategories: EnabledCategoriesMap = DEFAULT_ENABLED_CATEGORIES,
+  options: PipelineOptions = {}
 ): SanitizationResult {
   const startedAt = performance.now();
   const validationError = validateTextContent(inputText);
   if (validationError) {
+    const emptyCounts = createEmptyCounts();
     return {
       sanitizedText: '',
       matches: [],
       replacements: [],
       originalSegments: [],
       sanitizedSegments: [],
-      counts: createEmptyCounts(),
+      counts: emptyCounts,
       excludedCount: 0,
+      risk: computeRiskAssessment([], new Set(), emptyCounts),
       durationMs: Math.max(0.1, Number((performance.now() - startedAt).toFixed(2))),
       usedWorker,
       fileKind: 'csv',
@@ -135,14 +164,16 @@ export function processCsvDocument(
 
   const parsed = parseCsv(inputText);
   if (parsed.error) {
+    const emptyCounts = createEmptyCounts();
     return {
       sanitizedText: '',
       matches: [],
       replacements: [],
       originalSegments: [],
       sanitizedSegments: [],
-      counts: createEmptyCounts(),
+      counts: emptyCounts,
       excludedCount: 0,
+      risk: computeRiskAssessment([], new Set(), emptyCounts),
       durationMs: Math.max(0.1, Number((performance.now() - startedAt).toFixed(2))),
       usedWorker,
       fileKind: 'csv',
@@ -151,14 +182,16 @@ export function processCsvDocument(
   }
 
   if (parsed.rows.length === 0) {
+    const emptyCounts = createEmptyCounts();
     return {
       sanitizedText: '',
       matches: [],
       replacements: [],
       originalSegments: [],
       sanitizedSegments: [],
-      counts: createEmptyCounts(),
+      counts: emptyCounts,
       excludedCount: 0,
+      risk: computeRiskAssessment([], new Set(), emptyCounts),
       durationMs: Math.max(0.1, Number((performance.now() - startedAt).toFixed(2))),
       usedWorker,
       fileKind: 'csv',
@@ -205,11 +238,16 @@ export function processCsvDocument(
       }
 
       const prefix = `r${rowIdx}c${colIdx}`;
-      const cellMatches = detectAllEntities(cell, prefix, enabledCategories).map((m) => ({
+      const colHeader = headers[colIdx] || `Column ${colIdx + 1}`;
+      const cellMatches = detectAllEntities(cell, prefix, enabledCategories, {
+        sensitivity: options.sensitivity,
+        customRules: options.customRules,
+        columnHeader: colHeader,
+      }).map((m) => ({
         ...m,
         rowIndex: rowIdx,
         columnIndex: colIdx,
-        columnHeader: headers[colIdx] || `Column ${colIdx + 1}`,
+        columnHeader: colHeader,
       }));
 
       const { sanitizedText: sanitizedCell, replacements: cellReps } = redactTextWithMatches(
@@ -217,7 +255,8 @@ export function processCsvDocument(
         cellMatches,
         mode,
         excludedSet,
-        pseudonymManager
+        pseudonymManager,
+        options.customLabels
       );
 
       nextRow.push(sanitizedCell);
@@ -254,6 +293,7 @@ export function processCsvDocument(
 
   const sanitizedCsvText = serializeCsv(sanitizedRows, parsed.newline);
   const { counts, excludedCount } = countActiveMatches(allMatches, excludedSet);
+  const risk = computeRiskAssessment(allMatches, excludedSet, counts);
   const durationMs = Math.max(0.1, Number((performance.now() - startedAt).toFixed(2)));
 
   return {
@@ -264,6 +304,7 @@ export function processCsvDocument(
     sanitizedSegments,
     counts,
     excludedCount,
+    risk,
     durationMs,
     usedWorker,
     fileKind: 'csv',
@@ -281,7 +322,8 @@ export function runSanitizationPipeline(
   excludedIds: string[] = [],
   preserveCsvHeader = true,
   usedWorker = false,
-  enabledCategories: EnabledCategoriesMap = DEFAULT_ENABLED_CATEGORIES
+  enabledCategories: EnabledCategoriesMap = DEFAULT_ENABLED_CATEGORIES,
+  options: PipelineOptions = {}
 ): SanitizationResult {
   if (fileKind === 'csv') {
     return processCsvDocument(
@@ -290,7 +332,8 @@ export function runSanitizationPipeline(
       excludedIds,
       preserveCsvHeader,
       usedWorker,
-      enabledCategories
+      enabledCategories,
+      options
     );
   }
   return processTextDocument(
@@ -298,6 +341,7 @@ export function runSanitizationPipeline(
     mode,
     excludedIds,
     usedWorker,
-    enabledCategories
+    enabledCategories,
+    options
   );
 }

@@ -2,15 +2,15 @@ import type { SamplePreset } from '../types/privacy';
 
 /**
  * Primary comprehensive sample used by one-click "Load sample data" and Demo Mode.
- * Contains valid PII across all 6 categories, repeated entities, invalid candidates,
+ * Contains valid PII across core categories, repeated entities, invalid candidates,
  * ordinary non-PII numeric sequences, and normal operational prose.
  */
 export const NOISY_SAMPLE_TEXT = `INCIDENT TRIAGE & CUSTOMER ESCALATION LOG — Q4-2026-8841
 Environment: prod-ap-south-1 | Ticket Reference: 2026112701 | Batch Qty: 4500
 
 1. Primary Contact & Escalation Thread
-Customer Name: Aarav Kulkarni
 Primary Email: shivam@example.com
+Customer Name: Aarav Kulkarni
 Support Alias: support@company.in
 Secondary Copy (Duplicate): shivam@example.com
 QA Escalation Contact: user.name@example.org
@@ -46,15 +46,52 @@ export const SAMPLE_PRESETS: SamplePreset[] = [
   {
     id: 'comprehensive',
     label: 'Full Benchmark',
-    description: 'All 6 PII categories, duplicates, malformed emails, and invalid cards',
+    description: 'Core PII categories, duplicates, malformed emails, and invalid cards',
     fileKind: 'text',
+    isSynthetic: true,
     content: NOISY_SAMPLE_TEXT,
+  },
+  {
+    id: 'personal-profile',
+    label: 'Personal Profile',
+    description: 'Synthetic HR profile with Name, DOB, Age, Gender, Passport, Address & PIN',
+    fileKind: 'text',
+    isSynthetic: true,
+    content: `CANDIDATE ONBOARDING DOSSIER (SYNTHETIC SAMPLE)
+Applicant Name: Meenakshi Deshpande
+DOB: 14/05/1994
+Age: 32 yrs
+Gender: Female
+Email: meenakshi.deshpande@example.in
+Phone: +91 98230 11223
+Passport No: K4829103
+Voter ID: MHZ1234567
+Residential Address: Flat 402, Shivajinagar Lane 4, Pune, Maharashtra
+PIN Code: 411005
+Status: Orientation scheduled locally.`,
+  },
+  {
+    id: 'financial-record',
+    label: 'Financial Record',
+    description: 'Synthetic treasury ledger with Card, IFSC, UPI ID, Bank Account & PAN',
+    fileKind: 'text',
+    isSynthetic: true,
+    content: `TREASURY PAYOUT RECONCILIATION (SYNTHETIC SAMPLE)
+Account Holder: Siddharth Kulkarni
+PAN: ABCDE1234F
+Bank Account No: 918273645512
+IFSC: HDFC0001234
+UPI Handle: siddharth@okicici
+Settlement Card: 4111-1111-1111-1111
+Backup Card (Invalid Luhn, Ignored): 4111-1111-1111-1112
+Treasury Notice: Batch INV-2026-441 reconciled.`,
   },
   {
     id: 'indian-business',
     label: 'Indian Business KYC',
     description: 'Vendor onboarding record with PAN, Aadhaar format, +91 phones, and billing card',
     fileKind: 'text',
+    isSynthetic: true,
     content: `VENDOR ONBOARDING & GST SETTLEMENT DOSSIER — FY26-MH-104
 Entity: Sahyadri Precision Systems Pvt. Ltd. | Invoice Ref: INV-2026-88401
 
@@ -78,10 +115,11 @@ Remarks: GST filing reconciled for Pune Zone without manual variance.`,
     label: 'Support Ticket',
     description: 'Repeated customer email/phone threads ideal for testing Consistent Pseudonyms',
     fileKind: 'text',
+    isSynthetic: true,
     content: `SUPPORT TICKET #SUP-44920 — PAYMENT RETRY ESCALATION
 Agent: Meera Nair | Priority: P2 | Order Total: INR 4,290
 
-[10:12] Customer Ananya Rao (ananya.rao@example.in) reported double debit.
+[10:12] Customer Dr. Ananya Rao (ananya.rao@example.in) reported double debit.
 [10:14] Callback requested on +91 98765 43210; SMS receipt sent to +91 98765 43210.
 [10:18] Escalated by billing@finpay.co.in with masked card check 5500000000000004.
 [10:21] Customer replied from ananya.rao@example.in confirming webhook IP 192.168.1.45.
@@ -92,6 +130,7 @@ Agent: Meera Nair | Priority: P2 | Order Total: INR 4,290
     label: 'Technical Log',
     description: 'Nginx/auth trace with IPv4, IPv6, invalid octets, timestamps, and alert emails',
     fileKind: 'text',
+    isSynthetic: true,
     content: `2026-11-27T10:24:01Z WARN auth-gateway: 3 failed tokens from 192.168.1.45
 2026-11-27T10:24:04Z INFO edge-proxy: upstream ipv6 2001:0db8:85a3:0000:0000:8a2e:0370:7334 healthy
 2026-11-27T10:24:09Z INFO failover-node: routed via compressed 2001:db8::1 (latency 38ms)
@@ -100,11 +139,27 @@ Agent: Meera Nair | Priority: P2 | Order Total: INR 4,290
 2026-11-27T10:24:18Z INFO audit: request id 1234567890 completed with status 200`,
   },
   {
+    id: 'secrets-leak',
+    label: 'Credentials & URLs',
+    description: 'Synthetic incident dump with API keys, passwords, Bearer tokens & auth URLs',
+    fileKind: 'text',
+    isSynthetic: true,
+    content: `CI/CD CRASH DIAGNOSTIC DUMP (SYNTHETIC SAMPLE)
+Operator Email: sre.lead@devsecops.in
+GitHub Token: ghp_9X7aK3mP2vQ8wR5tN4yB6cF1hJ0sL2dZ9xM4
+AWS Key ID: AKIAIOSFODNN7EXAMPLE
+Auth Callback: https://portal.example.in/oauth/callback?token=demoSecretToken9981&env=staging
+Service password=DemoPass9941!
+Header: Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.demoPayload012345.demoSig98765
+Node IP: 172.16.40.12`,
+  },
+  {
     id: 'csv-ledger',
     label: 'CSV Export Sample',
     description: 'RFC 4180 CSV with quoted fields, embedded commas, PAN, cards, and repeated emails',
     fileKind: 'csv',
     fileName: 'support-exports-sample.csv',
+    isSynthetic: true,
     content: `Customer,Email,Contact,KYC_Note,Card
 "Kulkarni, Aarav",shivam@example.com,+91 98765 43210,"PAN ABCDE1234F, verified locally",4111-1111-1111-1111
 "Deshmukh, Sneha",sneha@company.in,9876543210,"Aadhaar 2345 6789 0123, IP 192.168.1.45",5500000000000004

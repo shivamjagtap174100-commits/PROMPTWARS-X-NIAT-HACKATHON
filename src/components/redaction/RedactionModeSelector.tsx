@@ -6,13 +6,19 @@ interface RedactionModeSelectorProps {
   onChange: (mode: RedactionMode) => void;
 }
 
-const MODES: RedactionMode[] = ['FULL_MASK', 'PARTIAL_MASK', 'PSEUDONYM'];
+const MODES: RedactionMode[] = [
+  'FULL_MASK',
+  'PARTIAL_MASK',
+  'REPLACE',
+  'REMOVE',
+  'PSEUDONYM',
+];
 
 export function RedactionModeSelector({ mode, onChange }: RedactionModeSelectorProps) {
   const activeMeta = REDACTION_MODE_META[mode];
 
   return (
-    <div className="pg-shadow-card flex flex-col gap-3 rounded-[10px] border border-[var(--pg-border)] bg-[var(--pg-surface)] px-4 py-3.5 lg:flex-row lg:items-center lg:justify-between">
+    <div className="pg-shadow-card flex flex-col gap-3 rounded-[10px] border border-[var(--pg-border)] bg-[var(--pg-surface)] px-4 py-3.5 xl:flex-row xl:items-center xl:justify-between">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="font-display text-xs font-semibold uppercase tracking-[0.07em] text-[var(--pg-text-primary)]">
@@ -33,7 +39,7 @@ export function RedactionModeSelector({ mode, onChange }: RedactionModeSelectorP
       <div
         role="radiogroup"
         aria-label="Redaction Mode"
-        className="inline-grid grid-cols-1 gap-1 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-surface-secondary)] p-1 sm:grid-cols-3"
+        className="inline-grid grid-cols-2 gap-1 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-surface-secondary)] p-1 sm:grid-cols-3 lg:grid-cols-5"
       >
         {MODES.map((item) => {
           const meta = REDACTION_MODE_META[item];
@@ -46,7 +52,7 @@ export function RedactionModeSelector({ mode, onChange }: RedactionModeSelectorP
               role="radio"
               aria-checked={selected}
               onClick={() => onChange(item)}
-              className={`flex h-9 items-center justify-center gap-2 rounded-md px-3.5 font-display text-xs font-semibold uppercase tracking-[0.04em] whitespace-nowrap transition-[color,background-color] ${
+              className={`flex h-9 items-center justify-center gap-1.5 rounded-md px-2.5 font-display text-[11px] font-semibold uppercase tracking-[0.04em] whitespace-nowrap transition-[color,background-color] ${
                 selected
                   ? 'bg-[#173D30] text-[#FBFAF6] dark:bg-[#A3C1A5] dark:text-[#111713]'
                   : 'text-[var(--pg-text-secondary)] hover:text-[var(--pg-text-primary)]'

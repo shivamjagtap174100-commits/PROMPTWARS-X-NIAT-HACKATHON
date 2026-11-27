@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Download,
   ExternalLink,
+  FileCheck2,
   Files,
   FileUp,
   Loader2,
@@ -55,6 +56,8 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
     }
   };
 
+  const report = sanitization.latestReport;
+
   return (
     <div className="pg-enter">
       <div className="mx-auto max-w-[1440px] space-y-8 px-4 py-10 sm:px-6 lg:px-8">
@@ -62,14 +65,14 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[var(--pg-border)] pb-6">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-[#173D30] dark:text-[#A3C1A5]">
-              Documents · In-Memory Session Library &amp; Batch Queue
+              Documents &amp; Reports · Session Library &amp; Batch Queue
             </p>
             <h1 className="mt-1.5 font-display text-3xl font-bold tracking-tight text-[var(--pg-text-primary)]">
-              Document session library
+              Document library &amp; compliance reports
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-[var(--pg-text-secondary)]">
-              Manage active session documents held in browser RAM only. Documents are never saved
-              permanently and clear automatically on session reset, logout, or tab close.
+              Manage active session documents held in browser RAM only and export privacy-safe
+              sanitization compliance reports containing zero original PII values.
             </p>
           </div>
 
@@ -96,6 +99,96 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
             </button>
           </div>
         </div>
+
+        {/* Sanitization Report Generator (Part 10) */}
+        <section
+          aria-labelledby="sanitization-report-heading"
+          className="pg-shadow-card rounded-[10px] border border-[var(--pg-border)] bg-[var(--pg-surface)] p-5 sm:p-6"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--pg-border)] pb-4">
+            <div className="flex items-center gap-2.5">
+              <FileCheck2
+                className="h-5 w-5 shrink-0 text-[#173D30] dark:text-[#A3C1A5]"
+                strokeWidth={1.85}
+                aria-hidden="true"
+              />
+              <div>
+                <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#173D30] dark:text-[#A3C1A5]">
+                  Local Report Generator · Zero Sensitive Values Included
+                </p>
+                <h2
+                  id="sanitization-report-heading"
+                  className="font-display text-base font-semibold text-[var(--pg-text-primary)]"
+                >
+                  Sanitization compliance report
+                </h2>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => sanitization.downloadReport('md')}
+                disabled={!report}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] px-3 font-display text-xs font-semibold text-[var(--pg-text-primary)] transition-colors hover:border-[#173D30] disabled:opacity-40"
+              >
+                <Download className="h-4 w-4" strokeWidth={1.85} aria-hidden="true" />
+                Download Report (.md)
+              </button>
+              <button
+                type="button"
+                onClick={() => sanitization.downloadReport('json')}
+                disabled={!report}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] px-3 font-display text-xs font-semibold text-[var(--pg-text-primary)] transition-colors hover:border-[#173D30] disabled:opacity-40"
+              >
+                <Download className="h-4 w-4" strokeWidth={1.85} aria-hidden="true" />
+                Download Report (.json)
+              </button>
+            </div>
+          </div>
+
+          {!report ? (
+            <p className="mt-4 text-xs text-[var(--pg-text-secondary)]">
+              Load or scan a document in Workspace to preview and download a verifiable compliance
+              summary report.
+            </p>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] p-3.5 text-xs">
+                <span className="font-mono text-[10px] uppercase text-[var(--pg-text-muted)]">
+                  Document / File
+                </span>
+                <p className="mt-1 truncate font-display font-semibold text-[var(--pg-text-primary)]">
+                  {report.fileName} ({report.fileKind.toUpperCase()})
+                </p>
+              </div>
+              <div className="rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] p-3.5 text-xs">
+                <span className="font-mono text-[10px] uppercase text-[var(--pg-text-muted)]">
+                  Sanitized / Remaining
+                </span>
+                <p className="mt-1 font-mono font-semibold tabular-nums text-[var(--pg-text-primary)]">
+                  {report.sanitizedEntityCount} sanitized · {report.remainingSensitiveCount} remaining
+                </p>
+              </div>
+              <div className="rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] p-3.5 text-xs">
+                <span className="font-mono text-[10px] uppercase text-[var(--pg-text-muted)]">
+                  Risk reduction
+                </span>
+                <p className="mt-1 font-mono font-semibold tabular-nums text-[#367A55] dark:text-[#A3C1A5]">
+                  {report.riskScoreBefore}/100 → {report.riskScoreAfter}/100
+                </p>
+              </div>
+              <div className="rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] p-3.5 text-xs">
+                <span className="font-mono text-[10px] uppercase text-[var(--pg-text-muted)]">
+                  Execution mode
+                </span>
+                <p className="mt-1 font-mono font-semibold text-[var(--pg-text-primary)]">
+                  {report.processingMode}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
 
         {/* Sequential Local Batch Sanitizer */}
         <section
@@ -136,16 +229,21 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
               />
               <button
                 type="button"
-                disabled={sanitization.isBatchProcessing}
                 onClick={() => batchInputRef.current?.click()}
+                disabled={sanitization.isBatchProcessing}
                 className="pg-action-primary inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 font-display text-xs font-semibold disabled:opacity-50"
               >
                 {sanitization.isBatchProcessing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.85} aria-hidden="true" />
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.85} aria-hidden="true" />
+                    Processing queue...
+                  </>
                 ) : (
-                  <FileUp className="h-4 w-4" strokeWidth={1.85} aria-hidden="true" />
+                  <>
+                    <FileUp className="h-4 w-4" strokeWidth={1.85} aria-hidden="true" />
+                    Select Multiple Files
+                  </>
                 )}
-                <span>Select files for batch scan</span>
               </button>
 
               {sanitization.batchResults.length > 0 && (
@@ -167,7 +265,7 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
                   key={item.id}
                   className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-xs"
                 >
-                  <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="flex items-center gap-2.5">
                     {item.status === 'completed' ? (
                       <CheckCircle2
                         className="h-4 w-4 shrink-0 text-[#367A55] dark:text-[#A3C1A5]"
@@ -181,15 +279,18 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
                         aria-hidden="true"
                       />
                     )}
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-[var(--pg-text-primary)]">
-                        {item.fileName}
-                      </p>
-                      <p className="font-mono text-[11px] text-[var(--pg-text-secondary)]">
+                    <div>
+                      <div className="font-medium text-[var(--pg-text-primary)]">
+                        {item.fileName}{' '}
+                        <span className="font-mono text-[11px] text-[var(--pg-text-muted)]">
+                          ({formatBytes(item.sizeBytes)} · {item.fileKind.toUpperCase()})
+                        </span>
+                      </div>
+                      <div className="font-mono text-[11px] text-[var(--pg-text-secondary)]">
                         {item.status === 'completed'
-                          ? `${formatBytes(item.sizeBytes)} · ${item.entityCount} sanitized · ${item.durationMs}ms`
+                          ? `${item.entityCount} entities sanitized cleanly in ${item.durationMs}ms`
                           : item.errorMessage}
-                      </p>
+                      </div>
                     </div>
                   </div>
 
@@ -218,8 +319,7 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
               aria-hidden="true"
             />
             <span>
-              Session-only RAM library — documents are never stored in browser persistence or sent
-              externally and reset cleanly on Clear, Logout, or tab close.
+              Session-only RAM library — raw file contents never persist across browser reloads.
             </span>
           </div>
           <span className="font-mono text-[11px] tabular-nums text-[var(--pg-text-primary)]">
@@ -262,6 +362,8 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
               <option value="ALL">All modes</option>
               <option value="FULL_MASK">Full Mask</option>
               <option value="PARTIAL_MASK">Partial Mask</option>
+              <option value="REPLACE">Replace Label</option>
+              <option value="REMOVE">Remove</option>
               <option value="PSEUDONYM">Consistent Pseudonymization</option>
             </select>
 
@@ -346,6 +448,8 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
                       </div>
                       <div className="mt-0.5 font-mono text-[11px] text-[var(--pg-text-muted)]">
                         {REDACTION_MODE_META[doc.redactionMode].title} · {doc.exportStatus}
+                        {doc.fileSizeBytes !== undefined ? ` · ${formatBytes(doc.fileSizeBytes)}` : ''}
+                        {doc.riskScore !== undefined ? ` · Risk ${doc.riskScore}/100` : ''}
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
@@ -398,7 +502,7 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
                           aria-label={`Delete ${doc.documentName}`}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--pg-border)] text-[var(--pg-text-secondary)] hover:border-[#B64B43]/50 hover:text-[#B64B43]"
                         >
-                          <Trash2 className="h-4 w-4" strokeWidth={1.85} aria-hidden="true" />
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.85} aria-hidden="true" />
                         </button>
                       </div>
                     </td>
@@ -410,11 +514,11 @@ export function DocumentsPage({ sanitization, onNavigate }: DocumentsPageProps) 
         )}
       </div>
 
-      <footer className="border-t border-[var(--pg-border)] py-7">
+      <footer className="mt-12 border-t border-[var(--pg-border)] py-7">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <BrandLockup compact />
           <p className="font-mono text-xs text-[var(--pg-text-secondary)]">
-            Volatile browser-memory session index · Cleared on logout or reset
+            Active browser RAM library · Metadata preserved cleanly without raw text
           </p>
         </div>
       </footer>

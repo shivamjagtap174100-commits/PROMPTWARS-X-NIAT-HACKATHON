@@ -1,5 +1,9 @@
 import type { CategoryCounts } from '../../types/privacy';
-import { CATEGORY_META, CATEGORY_ORDER } from '../../utils/categoryTheme';
+import {
+  CATEGORY_META,
+  CORE_CATEGORY_ORDER,
+  EXTENDED_CATEGORY_ORDER,
+} from '../../utils/categoryTheme';
 
 interface DetectionOverviewProps {
   counts: CategoryCounts;
@@ -15,6 +19,7 @@ export function DetectionOverview({
   usedWorker,
 }: DetectionOverviewProps) {
   const totalDetected = counts.total + excludedCount;
+  const activeExtendedCategories = EXTENDED_CATEGORY_ORDER.filter((cat) => counts[cat] > 0);
 
   return (
     <section aria-labelledby="detection-overview-heading" className="space-y-3">
@@ -49,7 +54,7 @@ export function DetectionOverview({
         </div>
       </div>
 
-      {/* Editorial Typographic Ruled Strip */}
+      {/* Primary Core 6-Category Ruled Strip */}
       <div className="pg-shadow-card grid grid-cols-2 divide-y divide-[var(--pg-border)] rounded-[10px] border border-[var(--pg-border)] bg-[var(--pg-surface)] sm:grid-cols-4 lg:grid-cols-7 lg:divide-x lg:divide-y-0">
         <div className="col-span-2 flex flex-col justify-between bg-[var(--pg-surface-secondary)]/50 p-4 sm:col-span-4 lg:col-span-1">
           <span className="font-display text-xs font-semibold text-[var(--pg-text-secondary)]">
@@ -68,7 +73,7 @@ export function DetectionOverview({
           </div>
         </div>
 
-        {CATEGORY_ORDER.map((category) => {
+        {CORE_CATEGORY_ORDER.map((category) => {
           const meta = CATEGORY_META[category];
           const count = counts[category];
 
@@ -91,6 +96,31 @@ export function DetectionOverview({
           );
         })}
       </div>
+
+      {/* Extended Identity, Financial, Secret & Location Matches (shown cleanly whenever matched) */}
+      {activeExtendedCategories.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {activeExtendedCategories.map((category) => {
+            const meta = CATEGORY_META[category];
+            return (
+              <div
+                key={category}
+                data-testid={`count-${category}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-surface)] px-3 py-1.5 text-xs"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-2 w-2 rounded-full ${meta.dotColorClass}`}
+                />
+                <span className="text-[var(--pg-text-secondary)]">{meta.label}:</span>
+                <span className="font-mono font-semibold tabular-nums text-[var(--pg-text-primary)]">
+                  {counts[category]}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }

@@ -10,6 +10,9 @@ self.onmessage = (event: MessageEvent<WorkerRequestPayload>) => {
     excludedIds,
     preserveCsvHeader,
     enabledCategories,
+    sensitivity,
+    customRules,
+    customLabels,
   } = event.data;
 
   try {
@@ -20,7 +23,8 @@ self.onmessage = (event: MessageEvent<WorkerRequestPayload>) => {
       excludedIds,
       preserveCsvHeader,
       true,
-      enabledCategories
+      enabledCategories,
+      { sensitivity, customRules, customLabels }
     );
     const response: WorkerResponsePayload = { requestId, result };
     self.postMessage(response);

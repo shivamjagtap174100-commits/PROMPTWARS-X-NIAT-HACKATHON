@@ -1,11 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_ENABLED_CATEGORIES } from '../engine/detectors/detectAll';
 import { validateSelectedFile } from '../engine/parsing/fileValidation';
 import { runSanitizationPipeline } from '../engine/pipeline';
+import {
+  buildSanitizationReport,
+  formatSanitizationReportMarkdown,
+} from '../engine/riskAnalyzer';
 import type {
   AuditEntry,
   AuditStageRecord,
   BatchFileResult,
+  CustomLabelsMap,
+  CustomRuleDefinition,
   EnabledCategoriesMap,
   EntityCategory,
   ExportStatus,
@@ -13,6 +19,7 @@ import type {
   FileMetadata,
   ProcessingLogEntry,
   RedactionMode,
+  SanitizationReport,
   SanitizationResult,
   SanitizationSettings,
   SessionDocumentRecord,
@@ -32,20 +39,30 @@ import {
   formatDateTimestamp,
   formatTimestamp,
 } from '../utils/format';
-import { NOISY_SAMPLE_TEXT, SAMPLE_PRESETS } from '../utils/sampleData';
 import {
   readStoredJson,
   removeStoredKey,
   STORAGE_KEYS,
   writeStoredJson,
 } from '../utils/localPersistence';
+import { NOISY_SAMPLE_TEXT, SAMPLE_PRESETS } from '../utils/sampleData';
 import { disposeSanitizationWorker, sanitizeDocumentAsync } from '../workers/workerClient';
 import { useDebouncedValue } from './useDebouncedValue';
 
 interface StoredPreferences {
   redactionMode?: RedactionMode;
-  enabledCategories?: EnabledCategoriesMap;
-  settings?: SanitizationSettings;
+  enabledCategories?: Partial<EnabledCategoriesMap>;
+  settings?: Partial<SanitizationSettings>;
+  customRules?: CustomRuleDefinition[];
+  customLabels?: CustomLabelsMap;
+}
+
+interface WorkspaceHistorySnapshot {
+  rawText: string;
+  fileKind: FileKind;
+  documentTitle: string;
+  redactionMode: RedactionMode;
+  excludedIds: string[];
 }
 
 const DEFAULT_SETTINGS: SanitizationSettings = {
@@ -53,6 +70,23 @@ const DEFAULT_SETTINGS: SanitizationSettings = {
   workerThresholdChars: 25_000,
   preserveCsvHeader: true,
   syncDiffScroll: true,
+  sensitivity: 'BALANCED',
+};
+
+const EMPTY_CATEGORY_COUNTS: Record<EntityCategory, number> = {
+  EMAIL: 0,
+  PHONE: 0,
+  IP: 0,
+  PAN: 0,
+  AADHAAR: 0,
+  CREDIT_CARD: 0,
+  PERSON_NAME: 0,
+  DOB_AGE: 0,
+  GOV_ID: 0,
+  FINANCIAL_ID: 0,
+  DIGITAL_SECRET: 0,
+  LOCATION_ADDRESS: 0,
+  CUSTOM: 0,
 };
 
 const EMPTY_RESULT: SanitizationResult = runSanitizationPipeline('', 'text', 'FULL_MASK', []);
@@ -69,15 +103,31 @@ function buildInitialLogs(): ProcessingLogEntry[] {
       id: createClientUid('log'),
       timestamp: formatTimestamp(),
       level: 'success',
-      message: 'Local detection engine ready.',
+      message: 'Local multi-category detection engine ready.',
     },
   ];
 }
 
-function stripSensitiveTextFromDocs(
-  docs: SessionDocumentRecord[]
-): SessionDocumentRecord[] {
+function stripSensitiveTextFromDocs(docs: SessionDocumentRecord[]): SessionDocumentRecord[] {
   return docs.map(({ rawContent: _r, sanitizedText: _s, ...metadataOnly }) => metadataOnly);
+}
+
+function extractCategoryCountsRecord(counts: SanitizationResult['counts']): Record<EntityCategory, number> {
+  return {
+    EMAIL: counts.EMAIL,
+    PHONE: counts.PHONE,
+    IP: counts.IP,
+    PAN: counts.PAN,
+    AADHAAR: counts.AADHAAR,
+    CREDIT_CARD: counts.CREDIT_CARD,
+    PERSON_NAME: counts.PERSON_NAME,
+    DOB_AGE: counts.DOB_AGE,
+    GOV_ID: counts.GOV_ID,
+    FINANCIAL_ID: counts.FINANCIAL_ID,
+    DIGITAL_SECRET: counts.DIGITAL_SECRET,
+    LOCATION_ADDRESS: counts.LOCATION_ADDRESS,
+    CUSTOM: counts.CUSTOM,
+  };
 }
 
 function buildAuditStages(
@@ -101,11 +151,11 @@ function buildAuditStages(
     },
     {
       stage: 'DETECTION_COMPLETED',
-      label: 'Detection completed',
+      label: 'Detection & classification completed',
       timestamp: completedAt,
-      detail: `Scanned 6 rule sets in ${result.durationMs}ms · ${
+      detail: `Scanned rule sets in ${result.durationMs}ms · ${
         result.counts.total + result.excludedCount
-      } raw candidate matches`,
+      } entities · Risk ${result.risk.overallRiskScore}/100`,
       status: 'done',
     },
     {
@@ -113,7 +163,7 @@ function buildAuditStages(
       label: 'Redaction completed',
       timestamp: completedAt,
       detail: `${modeTitle} · ${result.counts.total} redacted${
-        result.excludedCount > 0 ? ` · ${result.excludedCount} preserved` : ''
+        result.excludedCount > 0 ? ` · ${result.excludedCount} excluded` : ''
       }`,
       status: 'done',
     },
@@ -121,7 +171,7 @@ function buildAuditStages(
       stage: 'EXPORT_COMPLETED',
       label: 'Export completed',
       timestamp: '—',
-      detail: 'Pending local copy or TXT/CSV download',
+      detail: 'Pending local copy, sanitized file download, or compliance report',
       status: 'pending',
     },
   ];
@@ -141,13 +191,25 @@ export function useSanitizationSession(shortcutsEnabled = true) {
   const [redactionMode, setRedactionMode] = useState<RedactionMode>(
     () => initialPrefs.current?.redactionMode || 'FULL_MASK'
   );
-  const [enabledCategories, setEnabledCategories] = useState<EnabledCategoriesMap>(
-    () => initialPrefs.current?.enabledCategories || DEFAULT_ENABLED_CATEGORIES
-  );
+  const [enabledCategories, setEnabledCategories] = useState<EnabledCategoriesMap>(() => ({
+    ...DEFAULT_ENABLED_CATEGORIES,
+    ...(initialPrefs.current?.enabledCategories || {}),
+  }));
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
-  const [settings, setSettings] = useState<SanitizationSettings>(
-    () => initialPrefs.current?.settings || DEFAULT_SETTINGS
+  const [settings, setSettings] = useState<SanitizationSettings>(() => ({
+    ...DEFAULT_SETTINGS,
+    ...(initialPrefs.current?.settings || {}),
+  }));
+  const [customRules, setCustomRules] = useState<CustomRuleDefinition[]>(
+    () => initialPrefs.current?.customRules || []
   );
+  const [customLabels, setCustomLabels] = useState<CustomLabelsMap>(
+    () => initialPrefs.current?.customLabels || {}
+  );
+
+  // Volatile RAM Undo / Redo Stacks
+  const [undoStack, setUndoStack] = useState<WorkspaceHistorySnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<WorkspaceHistorySnapshot[]>([]);
 
   const [result, setResult] = useState<SanitizationResult>(EMPTY_RESULT);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -184,8 +246,10 @@ export function useSanitizationSession(shortcutsEnabled = true) {
       redactionMode,
       enabledCategories,
       settings,
+      customRules,
+      customLabels,
     });
-  }, [redactionMode, enabledCategories, settings]);
+  }, [redactionMode, enabledCategories, settings, customRules, customLabels]);
 
   useEffect(() => {
     if (!hasMountedAuditRef.current) {
@@ -232,6 +296,65 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     immediateBypassRef.current ? 0 : settings.debounceMs,
     ''
   );
+
+  const pushHistorySnapshot = useCallback(
+    (snapshot?: WorkspaceHistorySnapshot) => {
+      const target = snapshot || {
+        rawText,
+        fileKind,
+        documentTitle,
+        redactionMode,
+        excludedIds,
+      };
+      setUndoStack((prev) => [...prev.slice(-24), target]);
+      setRedoStack([]);
+    },
+    [rawText, fileKind, documentTitle, redactionMode, excludedIds]
+  );
+
+  const undo = useCallback(() => {
+    if (undoStack.length === 0) return false;
+    const previous = undoStack[undoStack.length - 1];
+    const currentSnapshot: WorkspaceHistorySnapshot = {
+      rawText,
+      fileKind,
+      documentTitle,
+      redactionMode,
+      excludedIds,
+    };
+    setUndoStack((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [...prev.slice(-24), currentSnapshot]);
+    immediateBypassRef.current = true;
+    setRawText(previous.rawText);
+    setFileKind(previous.fileKind);
+    setDocumentTitle(previous.documentTitle);
+    setRedactionMode(previous.redactionMode);
+    setExcludedIds(previous.excludedIds);
+    setExportStatus('Not Exported');
+    return true;
+  }, [undoStack, rawText, fileKind, documentTitle, redactionMode, excludedIds]);
+
+  const redo = useCallback(() => {
+    if (redoStack.length === 0) return false;
+    const nextSnapshot = redoStack[redoStack.length - 1];
+    const currentSnapshot: WorkspaceHistorySnapshot = {
+      rawText,
+      fileKind,
+      documentTitle,
+      redactionMode,
+      excludedIds,
+    };
+    setRedoStack((prev) => prev.slice(0, -1));
+    setUndoStack((prev) => [...prev.slice(-24), currentSnapshot]);
+    immediateBypassRef.current = true;
+    setRawText(nextSnapshot.rawText);
+    setFileKind(nextSnapshot.fileKind);
+    setDocumentTitle(nextSnapshot.documentTitle);
+    setRedactionMode(nextSnapshot.redactionMode);
+    setExcludedIds(nextSnapshot.excludedIds);
+    setExportStatus('Not Exported');
+    return true;
+  }, [redoStack, rawText, fileKind, documentTitle, redactionMode, excludedIds]);
 
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((item) => item.id !== id));
@@ -327,6 +450,9 @@ export function useSanitizationSession(shortcutsEnabled = true) {
       preserveCsvHeader: settings.preserveCsvHeader,
       workerThresholdChars: settings.workerThresholdChars,
       enabledCategories,
+      sensitivity: settings.sensitivity,
+      customRules,
+      customLabels,
     })
       .then((nextResult) => {
         if (token !== latestRunTokenRef.current) return;
@@ -353,22 +479,17 @@ export function useSanitizationSession(shortcutsEnabled = true) {
           .map(([cat]) => cat)
           .join(',');
 
-        const signature = `${activeText.length}:${fileKind}:${redactionMode}:${enabledKey}:${excludedIds.join(',')}:${nextResult.matches.map((m) => m.id).join(',')}`;
+        const signature = `${activeText.length}:${fileKind}:${redactionMode}:${settings.sensitivity}:${enabledKey}:${excludedIds.join(',')}:${customRules.length}:${JSON.stringify(customLabels)}:${nextResult.matches.map((m) => m.id).join(',')}`;
         if (signature !== lastAuditedSignatureRef.current) {
           lastAuditedSignatureRef.current = signature;
 
-          appendLog('info', 'Email detection completed.');
-          appendLog('info', 'Phone validation completed.');
-          appendLog('info', 'IP validation completed.');
-          appendLog('info', 'PAN & Aadhaar format checks completed.');
-          appendLog('info', 'Luhn validation completed.');
           appendLog(
-            'success',
-            `Redaction engine completed (${redactionMode.replace('_', ' ')}).`
+            'info',
+            `Detection & classification scan completed (${nextResult.risk.totalFindings} entities, risk score ${nextResult.risk.overallRiskScore}/100).`
           );
           appendLog(
             'success',
-            `Sanitized document generated (${nextResult.counts.total} active entities).`
+            `Sanitized document generated (${REDACTION_MODE_META[redactionMode].title}: ${nextResult.counts.total} active entities).`
           );
 
           const now = new Date();
@@ -390,14 +511,8 @@ export function useSanitizationSession(shortcutsEnabled = true) {
             wordCount: countWords(activeText),
             totalEntities: nextResult.counts.total,
             excludedEntities: nextResult.excludedCount,
-            categoryCounts: {
-              EMAIL: nextResult.counts.EMAIL,
-              PHONE: nextResult.counts.PHONE,
-              IP: nextResult.counts.IP,
-              PAN: nextResult.counts.PAN,
-              AADHAAR: nextResult.counts.AADHAAR,
-              CREDIT_CARD: nextResult.counts.CREDIT_CARD,
-            },
+            riskScore: nextResult.risk.overallRiskScore,
+            categoryCounts: extractCategoryCountsRecord(nextResult.counts),
             redactionMode,
             durationMs: nextResult.durationMs,
             exportStatus: 'Not Exported',
@@ -416,12 +531,14 @@ export function useSanitizationSession(shortcutsEnabled = true) {
           const currentDocId = activeSessionDocIdRef.current;
           const nextDocRecord: SessionDocumentRecord = {
             id: currentDocId,
-            documentName:
-              safeDocLabel || `Inline ${fileKind.toUpperCase()} document`,
+            documentName: safeDocLabel || `Inline ${fileKind.toUpperCase()} document`,
             fileKind,
+            fileSizeBytes: fileMeta?.sizeBytes ?? new Blob([activeText]).size,
             processingStatus: 'Completed',
             lastProcessedAt: entry.dateLabel,
             detectionCount: nextResult.counts.total,
+            excludedCount: nextResult.excludedCount,
+            riskScore: nextResult.risk.overallRiskScore,
             redactionMode,
             exportStatus: 'Not Exported',
             rawContent: activeText,
@@ -449,31 +566,44 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     enabledCategories,
     settings.preserveCsvHeader,
     settings.workerThresholdChars,
+    settings.sensitivity,
+    customRules,
+    customLabels,
     fileMeta?.name,
+    fileMeta?.sizeBytes,
     documentTitle,
     appendLog,
   ]);
 
-  const handleTextChange = useCallback((nextText: string) => {
-    if (!nextText) {
-      immediateBypassRef.current = true;
-      setFileKind('text');
-      setFileMeta(null);
-      setDocumentTitle('Untitled document');
-      setExcludedIds([]);
-      setIsDemoSession(false);
-      lastAuditedSignatureRef.current = '';
-    }
-    setRawText(nextText);
-    setExportStatus('Not Exported');
-    setErrorBanner(null);
-  }, []);
+  const handleTextChange = useCallback(
+    (nextText: string) => {
+      if (rawText !== nextText) {
+        // Save concise undo checkpoint when editing across non-trivial transitions
+        if (undoStack.length === 0 || Math.abs(rawText.length - nextText.length) > 8 || nextText === '') {
+          pushHistorySnapshot();
+        }
+      }
+      if (!nextText) {
+        immediateBypassRef.current = true;
+        setFileKind('text');
+        setFileMeta(null);
+        setDocumentTitle('Untitled document');
+        setExcludedIds([]);
+        setIsDemoSession(false);
+        lastAuditedSignatureRef.current = '';
+      }
+      setRawText(nextText);
+      setExportStatus('Not Exported');
+      setErrorBanner(null);
+    },
+    [rawText, undoStack.length, pushHistorySnapshot]
+  );
 
   const loadSamplePreset = useCallback(
     (presetId: string, options?: { demoMode?: boolean; mode?: RedactionMode }) => {
-      const preset =
-        SAMPLE_PRESETS.find((item) => item.id === presetId) || SAMPLE_PRESETS[0];
+      const preset = SAMPLE_PRESETS.find((item) => item.id === presetId) || SAMPLE_PRESETS[0];
 
+      pushHistorySnapshot();
       immediateBypassRef.current = true;
       activeSessionDocIdRef.current = createClientUid('doc');
       setActivePresetId(preset.id);
@@ -497,19 +627,20 @@ export function useSanitizationSession(shortcutsEnabled = true) {
       }
       setRawText(preset.content);
 
-      appendLog('info', `Sample loaded (${preset.label}).`);
+      appendLog('info', `Synthetic sample loaded (${preset.label}).`);
       pushToast(
         'success',
         options?.demoMode ? 'Interactive demo active' : `${preset.label} loaded`,
         options?.demoMode
-          ? 'Consistent pseudonymization running locally on sample document'
+          ? 'Consistent pseudonymization running locally on synthetic sample'
           : preset.description
       );
     },
-    [appendLog, pushToast]
+    [pushHistorySnapshot, appendLog, pushToast]
   );
 
   const loadSampleData = useCallback(() => {
+    pushHistorySnapshot();
     immediateBypassRef.current = true;
     activeSessionDocIdRef.current = createClientUid('doc');
     setActivePresetId('comprehensive');
@@ -521,9 +652,9 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     setErrorBanner(null);
     setIsDemoSession(false);
     setRawText(NOISY_SAMPLE_TEXT);
-    appendLog('info', 'Sample document loaded.');
-    pushToast('success', 'Sample document loaded', 'All 6 PII categories scanned locally');
-  }, [appendLog, pushToast]);
+    appendLog('info', 'Synthetic benchmark sample loaded.');
+    pushToast('success', 'Sample document loaded', 'Local PII detectors scanning now');
+  }, [pushHistorySnapshot, appendLog, pushToast]);
 
   const runDemoMode = useCallback(() => {
     loadSamplePreset('customer-support', {
@@ -533,6 +664,9 @@ export function useSanitizationSession(shortcutsEnabled = true) {
   }, [loadSamplePreset]);
 
   const clearDocument = useCallback(() => {
+    if (rawText) {
+      pushHistorySnapshot();
+    }
     immediateBypassRef.current = true;
     activeSessionDocIdRef.current = createClientUid('doc');
     setRawText('');
@@ -560,14 +694,7 @@ export function useSanitizationSession(shortcutsEnabled = true) {
       wordCount: 0,
       totalEntities: 0,
       excludedEntities: 0,
-      categoryCounts: {
-        EMAIL: 0,
-        PHONE: 0,
-        IP: 0,
-        PAN: 0,
-        AADHAAR: 0,
-        CREDIT_CARD: 0,
-      },
+      categoryCounts: { ...EMPTY_CATEGORY_COUNTS },
       redactionMode,
       durationMs: 0,
       exportStatus: 'Not Exported',
@@ -583,8 +710,8 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     };
     setAuditEntries((prev) => [resetEntry, ...prev.slice(0, 24)]);
     appendLog('info', 'Workspace cleared and session pseudonym counters reset.');
-    pushToast('info', 'Workspace cleared', 'Session pseudonym mappings reset');
-  }, [appendLog, pushToast, redactionMode]);
+    pushToast('info', 'Workspace cleared', 'Session buffers & pseudonym maps reset');
+  }, [rawText, pushHistorySnapshot, appendLog, pushToast, redactionMode]);
 
   const rescanNow = useCallback(() => {
     if (!rawText) {
@@ -599,12 +726,15 @@ export function useSanitizationSession(shortcutsEnabled = true) {
 
   const handleModeChange = useCallback(
     (mode: RedactionMode) => {
+      if (mode !== redactionMode) {
+        pushHistorySnapshot();
+      }
       immediateBypassRef.current = true;
       setRedactionMode(mode);
       setExportStatus('Not Exported');
-      appendLog('info', `Redaction mode switched to ${mode.replace('_', ' ')}.`);
+      appendLog('info', `Redaction mode switched to ${REDACTION_MODE_META[mode].title}.`);
     },
-    [appendLog]
+    [redactionMode, pushHistorySnapshot, appendLog]
   );
 
   const toggleCategory = useCallback(
@@ -624,11 +754,12 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     immediateBypassRef.current = true;
     setEnabledCategories(DEFAULT_ENABLED_CATEGORIES);
     setExportStatus('Not Exported');
-    appendLog('info', 'All six PII detectors enabled.');
+    appendLog('info', 'All local PII detectors enabled.');
   }, [appendLog]);
 
   const toggleExcludeEntity = useCallback(
     (matchId: string) => {
+      pushHistorySnapshot();
       immediateBypassRef.current = true;
       setExcludedIds((prev) => {
         const exists = prev.includes(matchId);
@@ -636,15 +767,131 @@ export function useSanitizationSession(shortcutsEnabled = true) {
         appendLog(
           'info',
           exists
-            ? 'Entity exclusion removed; redaction reapplied.'
-            : 'Single entity excluded from redaction.'
+            ? 'Entity restored for redaction.'
+            : 'Entity excluded from redaction.'
         );
         return next;
       });
       setExportStatus('Not Exported');
     },
+    [pushHistorySnapshot, appendLog]
+  );
+
+  const includeAllMatches = useCallback(() => {
+    if (excludedIds.length === 0) return;
+    pushHistorySnapshot();
+    immediateBypassRef.current = true;
+    setExcludedIds([]);
+    setExportStatus('Not Exported');
+    appendLog('info', 'All detected entities marked for redaction.');
+  }, [excludedIds.length, pushHistorySnapshot, appendLog]);
+
+  const excludeAllMatches = useCallback(() => {
+    if (result.matches.length === 0) return;
+    pushHistorySnapshot();
+    immediateBypassRef.current = true;
+    setExcludedIds(result.matches.map((m) => m.id));
+    setExportStatus('Not Exported');
+    appendLog('warning', 'All detected entities temporarily excluded.');
+  }, [result.matches, pushHistorySnapshot, appendLog]);
+
+  const toggleCategoryMatchesExcluded = useCallback(
+    (category: EntityCategory, shouldExclude: boolean) => {
+      const targetIds = result.matches.filter((m) => m.category === category).map((m) => m.id);
+      if (targetIds.length === 0) return;
+      pushHistorySnapshot();
+      immediateBypassRef.current = true;
+      setExcludedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of targetIds) {
+          if (shouldExclude) next.add(id);
+          else next.delete(id);
+        }
+        return Array.from(next);
+      });
+      setExportStatus('Not Exported');
+      appendLog(
+        'info',
+        `${category} entities ${shouldExclude ? 'excluded from' : 'restored to'} redaction.`
+      );
+    },
+    [result.matches, pushHistorySnapshot, appendLog]
+  );
+
+  const toggleCsvCellExclusion = useCallback(
+    (matchIds: string[]) => {
+      if (matchIds.length === 0) return;
+      pushHistorySnapshot();
+      immediateBypassRef.current = true;
+      setExcludedIds((prev) => {
+        const set = new Set(prev);
+        const allCurrentlyExcluded = matchIds.every((id) => set.has(id));
+        for (const id of matchIds) {
+          if (allCurrentlyExcluded) set.delete(id);
+          else set.add(id);
+        }
+        return Array.from(set);
+      });
+      setExportStatus('Not Exported');
+      appendLog('info', 'Updated CSV cell redaction selection.');
+    },
+    [pushHistorySnapshot, appendLog]
+  );
+
+  const addCustomRule = useCallback(
+    (rule: Omit<CustomRuleDefinition, 'id'>) => {
+      try {
+        new RegExp(rule.pattern);
+      } catch {
+        pushToast('error', 'Invalid regex syntax', 'Please enter a valid JavaScript regular expression');
+        return false;
+      }
+      const created: CustomRuleDefinition = {
+        ...rule,
+        id: createClientUid('rule'),
+      };
+      immediateBypassRef.current = true;
+      setCustomRules((prev) => [...prev, created]);
+      setEnabledCategories((prev) => ({ ...prev, CUSTOM: true }));
+      appendLog('info', `Added custom local rule (${created.name}).`);
+      pushToast('success', 'Custom rule added', created.name);
+      return true;
+    },
+    [appendLog, pushToast]
+  );
+
+  const toggleCustomRule = useCallback((id: string) => {
+    immediateBypassRef.current = true;
+    setCustomRules((prev) => prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
+  }, []);
+
+  const deleteCustomRule = useCallback(
+    (id: string) => {
+      immediateBypassRef.current = true;
+      setCustomRules((prev) => prev.filter((r) => r.id !== id));
+      appendLog('info', 'Removed custom detection rule.');
+    },
     [appendLog]
   );
+
+  const updateCustomLabel = useCallback((category: EntityCategory, label: string) => {
+    immediateBypassRef.current = true;
+    setCustomLabels((prev) => {
+      const next = { ...prev };
+      if (!label.trim()) {
+        delete next[category];
+      } else {
+        next[category] = label.trim();
+      }
+      return next;
+    });
+  }, []);
+
+  const resetCustomLabels = useCallback(() => {
+    immediateBypassRef.current = true;
+    setCustomLabels({});
+    appendLog('info', 'Reset custom replacement labels to defaults.');
+  }, [appendLog]);
 
   const handleFileUpload = useCallback(
     async (file: File) => {
@@ -667,6 +914,7 @@ export function useSanitizationSession(shortcutsEnabled = true) {
           return;
         }
 
+        if (rawText) pushHistorySnapshot();
         immediateBypassRef.current = true;
         activeSessionDocIdRef.current = createClientUid('doc');
         setFileKind(validation.kind);
@@ -697,7 +945,7 @@ export function useSanitizationSession(shortcutsEnabled = true) {
         pushToast('error', 'Read failure', msg);
       }
     },
-    [appendLog, pushToast]
+    [rawText, pushHistorySnapshot, appendLog, pushToast]
   );
 
   const handleCopySanitized = useCallback(async () => {
@@ -774,6 +1022,41 @@ export function useSanitizationSession(shortcutsEnabled = true) {
   const handleDownloadSanitized = useCallback(() => {
     return fileKind === 'csv' ? handleDownloadCsv() : handleDownloadTxt();
   }, [fileKind, handleDownloadCsv, handleDownloadTxt]);
+
+  const latestReport: SanitizationReport | null = useMemo(() => {
+    if (!rawText || result.parseError) return null;
+    return buildSanitizationReport({
+      fileName: fileMeta?.name || documentTitle || 'Untitled document',
+      fileKind,
+      redactionMode,
+      result,
+    });
+  }, [rawText, fileKind, fileMeta?.name, documentTitle, redactionMode, result]);
+
+  const downloadReport = useCallback(
+    (format: 'json' | 'md') => {
+      if (!latestReport) {
+        pushToast('info', 'No scanned document', 'Scan or load a sample before exporting a report');
+        return false;
+      }
+      const payload =
+        format === 'json'
+          ? JSON.stringify(latestReport, null, 2)
+          : formatSanitizationReportMarkdown(latestReport);
+      const ext = format === 'json' ? 'json' : 'md';
+      const fileName = `privacyguard-sanitization-report.${ext}`;
+      const dl = downloadLocalFile(payload, fileName, 'text');
+      if (!dl.ok) {
+        pushToast('error', 'Report export failed', dl.error);
+        return false;
+      }
+      recordExportSuccess('Exported Report', `Sanitization compliance report saved (${fileName})`);
+      appendLog('success', `Privacy-safe sanitization report exported (${fileName}).`);
+      pushToast('success', 'Sanitization report exported', fileName);
+      return true;
+    },
+    [latestReport, recordExportSuccess, appendLog, pushToast]
+  );
 
   const clearAuditHistory = useCallback(() => {
     setAuditEntries([]);
@@ -853,6 +1136,9 @@ export function useSanitizationSession(shortcutsEnabled = true) {
             preserveCsvHeader: settings.preserveCsvHeader,
             workerThresholdChars: settings.workerThresholdChars,
             enabledCategories,
+            sensitivity: settings.sensitivity,
+            customRules,
+            customLabels,
           });
 
           if (batchRes.parseError) {
@@ -898,14 +1184,8 @@ export function useSanitizationSession(shortcutsEnabled = true) {
             wordCount: countWords(text),
             totalEntities: batchRes.counts.total,
             excludedEntities: batchRes.excludedCount,
-            categoryCounts: {
-              EMAIL: batchRes.counts.EMAIL,
-              PHONE: batchRes.counts.PHONE,
-              IP: batchRes.counts.IP,
-              PAN: batchRes.counts.PAN,
-              AADHAAR: batchRes.counts.AADHAAR,
-              CREDIT_CARD: batchRes.counts.CREDIT_CARD,
-            },
+            riskScore: batchRes.risk.overallRiskScore,
+            categoryCounts: extractCategoryCountsRecord(batchRes.counts),
             redactionMode,
             durationMs: batchRes.durationMs,
             exportStatus: 'Not Exported',
@@ -923,9 +1203,12 @@ export function useSanitizationSession(shortcutsEnabled = true) {
             id: itemId,
             documentName: file.name,
             fileKind: validation.kind,
+            fileSizeBytes: file.size,
             processingStatus: 'Completed',
             lastProcessedAt: formatDateTimestamp(now),
             detectionCount: batchRes.counts.total,
+            excludedCount: batchRes.excludedCount,
+            riskScore: batchRes.risk.overallRiskScore,
             redactionMode,
             exportStatus: 'Not Exported',
             rawContent: text,
@@ -971,7 +1254,10 @@ export function useSanitizationSession(shortcutsEnabled = true) {
       redactionMode,
       settings.preserveCsvHeader,
       settings.workerThresholdChars,
+      settings.sensitivity,
       enabledCategories,
+      customRules,
+      customLabels,
       appendLog,
       pushToast,
     ]
@@ -1004,6 +1290,7 @@ export function useSanitizationSession(shortcutsEnabled = true) {
       if (!target || !target.rawContent) {
         return false;
       }
+      if (rawText) pushHistorySnapshot();
       immediateBypassRef.current = true;
       activeSessionDocIdRef.current = target.id;
       setFileKind(target.fileKind);
@@ -1021,7 +1308,7 @@ export function useSanitizationSession(shortcutsEnabled = true) {
       appendLog('info', 'Loaded document from active browser session memory.');
       return true;
     },
-    [sessionDocuments, appendLog]
+    [sessionDocuments, rawText, pushHistorySnapshot, appendLog]
   );
 
   const downloadSessionDocument = useCallback(
@@ -1063,6 +1350,8 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     setFileMeta(null);
     setDocumentTitle('Untitled document');
     setExcludedIds([]);
+    setUndoStack([]);
+    setRedoStack([]);
     setExportStatus('Not Exported');
     setErrorBanner(null);
     setIsDemoSession(false);
@@ -1087,7 +1376,6 @@ export function useSanitizationSession(shortcutsEnabled = true) {
 
   const exportAuditMetadata = useCallback(() => {
     if (auditEntries.length === 0) return false;
-    // Strictly omit any source text, raw PII, or pseudonym mappings
     const safeMetadata = auditEntries.map((entry) => ({
       id: entry.id,
       timestamp: entry.timestamp,
@@ -1097,6 +1385,7 @@ export function useSanitizationSession(shortcutsEnabled = true) {
       fileKind: entry.fileKind,
       totalEntities: entry.totalEntities,
       excludedEntities: entry.excludedEntities,
+      riskScore: entry.riskScore,
       categoryCounts: entry.categoryCounts,
       redactionMode: entry.redactionMode,
       durationMs: entry.durationMs,
@@ -1113,7 +1402,7 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     return true;
   }, [auditEntries, pushToast, appendLog]);
 
-  // Global keyboard shortcuts (Alt+1/2/3 for modes, Alt+Shift+C copy, Ctrl+Shift+L demo)
+  // Global keyboard shortcuts (Alt+1/2/3/4/5 modes, Alt+Shift+C copy, Ctrl+Shift+L demo)
   useEffect(() => {
     if (!shortcutsEnabled) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1130,6 +1419,12 @@ export function useSanitizationSession(shortcutsEnabled = true) {
         } else if (event.key === '3') {
           event.preventDefault();
           handleModeChange('PSEUDONYM');
+        } else if (event.key === '4') {
+          event.preventDefault();
+          handleModeChange('REPLACE');
+        } else if (event.key === '5') {
+          event.preventDefault();
+          handleModeChange('REMOVE');
         }
       } else if (
         (event.ctrlKey || event.metaKey) &&
@@ -1156,7 +1451,12 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     enabledCategories,
     excludedIds,
     settings,
+    customRules,
+    customLabels,
+    canUndo: undoStack.length > 0,
+    canRedo: redoStack.length > 0,
     result,
+    latestReport,
     isProcessing,
     errorBanner,
     statusMessage,
@@ -1176,10 +1476,21 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     runDemoMode,
     rescanNow,
     clearDocument,
+    undo,
+    redo,
     handleModeChange,
     toggleCategory,
     enableAllCategories,
     toggleExcludeEntity,
+    includeAllMatches,
+    excludeAllMatches,
+    toggleCategoryMatchesExcluded,
+    toggleCsvCellExclusion,
+    addCustomRule,
+    toggleCustomRule,
+    deleteCustomRule,
+    updateCustomLabel,
+    resetCustomLabels,
     handleFileUpload,
     runBatchUpload,
     downloadBatchResult,
@@ -1189,6 +1500,7 @@ export function useSanitizationSession(shortcutsEnabled = true) {
     deleteSessionDocument,
     clearAllSessionData,
     exportAuditMetadata,
+    downloadReport,
     handleCopySanitized,
     handleDownloadTxt,
     handleDownloadCsv,

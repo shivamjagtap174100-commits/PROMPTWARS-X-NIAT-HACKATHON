@@ -1,4 +1,4 @@
-import { Check, Copy, Download, Lock } from 'lucide-react';
+import { Check, Copy, Download, FileCheck2, Lock } from 'lucide-react';
 import { useState } from 'react';
 import type { ExportStatus, FileKind, RedactionMode } from '../../types/privacy';
 import { REDACTION_MODE_META } from '../../utils/categoryTheme';
@@ -13,6 +13,7 @@ interface SanitizedOutputPaneProps {
   onCopy: () => Promise<boolean>;
   onDownloadTxt: () => boolean;
   onDownloadCsv: () => boolean;
+  onDownloadReport?: (format: 'json' | 'md') => boolean;
 }
 
 export function SanitizedOutputPane({
@@ -24,6 +25,7 @@ export function SanitizedOutputPane({
   onCopy,
   onDownloadTxt,
   onDownloadCsv,
+  onDownloadReport,
 }: SanitizedOutputPaneProps) {
   const [justCopied, setJustCopied] = useState(false);
 
@@ -84,10 +86,11 @@ export function SanitizedOutputPane({
             type="button"
             onClick={onDownloadTxt}
             disabled={!sanitizedText || hasError}
-            className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 font-display text-xs font-semibold transition-colors disabled:opacity-40 ${fileKind === 'text'
-              ? 'bg-[#FBFAF6] text-[#102D24] hover:bg-[#E5E8DF]'
-              : 'border border-white/18 bg-white/8 text-[#F1F1E9] hover:bg-white/15'
-              }`}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 font-display text-xs font-semibold transition-colors disabled:opacity-40 ${
+              fileKind === 'text'
+                ? 'bg-[#FBFAF6] text-[#102D24] hover:bg-[#E5E8DF]'
+                : 'border border-white/18 bg-white/8 text-[#F1F1E9] hover:bg-white/15'
+            }`}
           >
             <Download className="h-4 w-4" strokeWidth={1.85} aria-hidden="true" />
             Download TXT
@@ -97,14 +100,28 @@ export function SanitizedOutputPane({
             type="button"
             onClick={onDownloadCsv}
             disabled={!sanitizedText || hasError}
-            className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 font-display text-xs font-semibold transition-colors disabled:opacity-40 ${fileKind === 'csv'
-              ? 'bg-[#FBFAF6] text-[#102D24] hover:bg-[#E5E8DF]'
-              : 'border border-white/18 bg-white/8 text-[#F1F1E9] hover:bg-white/15'
-              }`}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 font-display text-xs font-semibold transition-colors disabled:opacity-40 ${
+              fileKind === 'csv'
+                ? 'bg-[#FBFAF6] text-[#102D24] hover:bg-[#E5E8DF]'
+                : 'border border-white/18 bg-white/8 text-[#F1F1E9] hover:bg-white/15'
+            }`}
           >
             <Download className="h-4 w-4" strokeWidth={1.85} aria-hidden="true" />
             Download CSV
           </button>
+
+          {onDownloadReport && (
+            <button
+              type="button"
+              onClick={() => onDownloadReport('md')}
+              disabled={!sanitizedText || hasError}
+              title="Export zero-PII Sanitization Compliance Report (.md)"
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-white/18 bg-white/8 px-2.5 font-display text-xs font-medium text-[#DDE6DA] transition-colors hover:bg-white/15 disabled:opacity-40"
+            >
+              <FileCheck2 className="h-3.5 w-3.5" strokeWidth={1.85} aria-hidden="true" />
+              Report
+            </button>
+          )}
         </div>
       </div>
 

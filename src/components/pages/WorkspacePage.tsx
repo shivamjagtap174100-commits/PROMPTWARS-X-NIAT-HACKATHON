@@ -1,4 +1,14 @@
-import { ArrowRight, Database, FileUp, Lock, Play, ScanSearch } from 'lucide-react';
+import {
+  ArrowRight,
+  Database,
+  FileUp,
+  Lock,
+  Play,
+  Redo2,
+  ScanSearch,
+  Sliders,
+  Undo2,
+} from 'lucide-react';
 import { useRef, useState, type ChangeEvent } from 'react';
 import type { useSanitizationSession } from '../../hooks/useSanitizationSession';
 import type { AppRoute, MobileWorkspaceTab } from '../../types/privacy';
@@ -7,8 +17,10 @@ import { ProcessingLogPanel } from '../activity/ProcessingLogPanel';
 import { PrivacyAuditPanel } from '../analytics/PrivacyAuditPanel';
 import { PrivacyInspectorPanel } from '../analytics/PrivacyInspectorPanel';
 import { PseudonymMappingInspector } from '../analytics/PseudonymMappingInspector';
+import { RiskAnalyzerPanel } from '../analytics/RiskAnalyzerPanel';
 import { BeforeAfterDiff } from '../comparison/BeforeAfterDiff';
 import { CsvColumnPreview } from '../comparison/CsvColumnPreview';
+import { CustomRulesPanel } from '../detection/CustomRulesPanel';
 import { DetectionInsightsPane } from '../detection/DetectionInsightsPane';
 import { DetectionOverview } from '../detection/DetectionOverview';
 import { DetectionRuleExplorer } from '../detection/DetectionRuleExplorer';
@@ -25,7 +37,7 @@ interface WorkspacePageProps {
 
 export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) {
   const [mobileTab, setMobileTab] = useState<MobileWorkspaceTab>('original');
-  const [workbenchTab, setWorkbenchTab] = useState<'mappings' | 'rules'>('mappings');
+  const [workbenchTab, setWorkbenchTab] = useState<'mappings' | 'rules' | 'custom'>('mappings');
   const toolbarFileInputRef = useRef<HTMLInputElement>(null);
 
   const handleToolbarFileSelect = (event: ChangeEvent<HTMLInputElement>) => {
@@ -59,7 +71,7 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
                 value={sanitization.documentTitle}
                 onChange={(e) => sanitization.setDocumentTitle(e.target.value)}
                 aria-label="Document name"
-                className="h-9 w-52 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] px-3 font-display text-sm font-semibold text-[var(--pg-text-primary)] focus:border-[#173D30] sm:w-60 dark:focus:border-[#A3C1A5]"
+                className="h-9 w-48 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] px-3 font-display text-sm font-semibold text-[var(--pg-text-primary)] focus:border-[#173D30] sm:w-56 dark:focus:border-[#A3C1A5]"
               />
               <span className="rounded border border-[var(--pg-border)] bg-[var(--pg-surface-secondary)] px-2 py-1 font-mono text-[11px] font-medium uppercase text-[var(--pg-text-secondary)]">
                 {sanitization.fileKind}
@@ -67,9 +79,33 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
               <span className="rounded border border-[var(--pg-border)] bg-[var(--pg-bg)] px-2 py-1 font-mono text-[11px] text-[var(--pg-text-muted)]">
                 {docStateLabel}
               </span>
+
+              {/* Undo / Redo History Controls */}
+              <div className="inline-flex items-center gap-1 pl-1">
+                <button
+                  type="button"
+                  onClick={sanitization.undo}
+                  disabled={!sanitization.canUndo}
+                  aria-label="Undo last workspace change"
+                  title="Undo"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] text-[var(--pg-text-secondary)] transition-colors hover:text-[var(--pg-text-primary)] disabled:opacity-35"
+                >
+                  <Undo2 className="h-4 w-4" strokeWidth={1.85} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={sanitization.redo}
+                  disabled={!sanitization.canRedo}
+                  aria-label="Redo last workspace change"
+                  title="Redo"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] text-[var(--pg-text-secondary)] transition-colors hover:text-[var(--pg-text-primary)] disabled:opacity-35"
+                >
+                  <Redo2 className="h-4 w-4" strokeWidth={1.85} aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
-            {/* RIGHT: Upload, Load Sample, Scan, Processing Status, Privacy Indicator */}
+            {/* RIGHT: Upload, Load Sample, Scan, Sensitivity Toggle, Status, Privacy Indicator */}
             <div className="flex flex-wrap items-center gap-2">
               <input
                 ref={toolbarFileInputRef}
@@ -115,18 +151,32 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
                 Scan
               </button>
 
+              <button
+                type="button"
+                onClick={() =>
+                  sanitization.updateSettings({
+                    sensitivity:
+                      sanitization.settings.sensitivity === 'BALANCED' ? 'STRICT' : 'BALANCED',
+                  })
+                }
+                title="Toggle Balanced vs Strict column-aware NER and URL sensitivity"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] px-2.5 font-mono text-[11px] text-[var(--pg-text-secondary)] transition-colors hover:text-[var(--pg-text-primary)]"
+              >
+                <Sliders className="h-3.5 w-3.5" strokeWidth={1.85} aria-hidden="true" />
+                <span>Sensitivity: {sanitization.settings.sensitivity}</span>
+              </button>
+
               <span
                 aria-live="polite"
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] px-3 font-mono text-[11px] text-[var(--pg-text-secondary)]"
               >
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    sanitization.isProcessing
-                      ? 'bg-[#B88735]'
-                      : sanitization.errorBanner
-                        ? 'bg-[#B64B43]'
-                        : 'bg-[#367A55] dark:bg-[#A3C1A5]'
-                  }`}
+                  className={`h-1.5 w-1.5 rounded-full ${sanitization.isProcessing
+                    ? 'bg-[#B88735]'
+                    : sanitization.errorBanner
+                      ? 'bg-[#B64B43]'
+                      : 'bg-[#367A55] dark:bg-[#A3C1A5]'
+                    }`}
                 />
                 {sanitization.statusMessage}
               </span>
@@ -142,11 +192,11 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
             </div>
           </div>
 
-          {/* Sample Library Presets Bar */}
+          {/* Detection Playground — Synthetic Sample Presets Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--pg-border)] pt-3">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="mr-1 font-mono text-[11px] uppercase tracking-[0.06em] text-[var(--pg-text-muted)]">
-                Samples:
+                Synthetic Playground:
               </span>
               {SAMPLE_PRESETS.map((preset) => {
                 const active =
@@ -157,11 +207,10 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
                     type="button"
                     title={preset.description}
                     onClick={() => sanitization.loadSamplePreset(preset.id)}
-                    className={`h-8 rounded-lg border px-2.5 font-display text-xs font-medium transition-colors ${
-                      active
-                        ? 'border-[#173D30] bg-[#DDE6DA] text-[#102D24] dark:border-[#A3C1A5] dark:bg-[#233128] dark:text-[#F1F1E9]'
-                        : 'border-[var(--pg-border)] bg-[var(--pg-bg)] text-[var(--pg-text-secondary)] hover:border-[var(--pg-border-strong)] hover:text-[var(--pg-text-primary)]'
-                    }`}
+                    className={`h-8 rounded-lg border px-2.5 font-display text-xs font-medium transition-colors ${active
+                      ? 'border-[#173D30] bg-[#DDE6DA] text-[#102D24] dark:border-[#A3C1A5] dark:bg-[#233128] dark:text-[#F1F1E9]'
+                      : 'border-[var(--pg-border)] bg-[var(--pg-bg)] text-[var(--pg-text-secondary)] hover:border-[var(--pg-border-strong)] hover:text-[var(--pg-text-primary)]'
+                      }`}
                   >
                     {preset.label}
                   </button>
@@ -181,7 +230,7 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
         </div>
       </section>
 
-      {/* Main Three-Panel Document Studio (Desktop 3-col, Tablet 2-col adaptive, Mobile tabbed) */}
+      {/* Main Three-Panel Document Studio */}
       <div className="mx-auto max-w-[1440px] space-y-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <StatusBanner
           message={sanitization.errorBanner}
@@ -194,7 +243,7 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
           onChange={sanitization.handleModeChange}
         />
 
-        {/* Mobile Tab Switcher (Original / Review / Output) */}
+        {/* Mobile Tab Switcher */}
         <div
           role="tablist"
           aria-label="Mobile workspace panes"
@@ -215,11 +264,10 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
                 role="tab"
                 aria-selected={active}
                 onClick={() => setMobileTab(tab.id)}
-                className={`h-9 rounded-md font-display text-xs font-semibold transition-colors ${
-                  active
-                    ? 'bg-[#173D30] text-[#FBFAF6] dark:bg-[#A3C1A5] dark:text-[#111713]'
-                    : 'text-[var(--pg-text-secondary)] hover:text-[var(--pg-text-primary)]'
-                }`}
+                className={`h-9 rounded-md font-display text-xs font-semibold transition-colors ${active
+                  ? 'bg-[#173D30] text-[#FBFAF6] dark:bg-[#A3C1A5] dark:text-[#111713]'
+                  : 'text-[var(--pg-text-secondary)] hover:text-[var(--pg-text-primary)]'
+                  }`}
               >
                 {tab.label}
               </button>
@@ -227,7 +275,7 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
           })}
         </div>
 
-        {/* Adaptive Studio Frame: md 2-col (Orig + Review, Output wide), xl 3-col */}
+        {/* Adaptive Three-Panel Studio */}
         <section
           id="workspace-sanitize"
           aria-label="Three-column sanitization studio"
@@ -263,13 +311,14 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
               onToggleCategory={sanitization.toggleCategory}
               onEnableAllCategories={sanitization.enableAllCategories}
               onToggleExclude={sanitization.toggleExcludeEntity}
+              onIncludeAll={sanitization.includeAllMatches}
+              onExcludeAll={sanitization.excludeAllMatches}
             />
           </div>
 
           <div
-            className={`md:col-span-2 md:block xl:col-span-4 ${
-              mobileTab === 'sanitized' ? 'block' : 'hidden'
-            }`}
+            className={`md:col-span-2 md:block xl:col-span-4 ${mobileTab === 'sanitized' ? 'block' : 'hidden'
+              }`}
           >
             <SanitizedOutputPane
               sanitizedText={sanitization.result.sanitizedText}
@@ -280,6 +329,7 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
               onCopy={sanitization.handleCopySanitized}
               onDownloadTxt={sanitization.handleDownloadTxt}
               onDownloadCsv={sanitization.handleDownloadCsv}
+              onDownloadReport={sanitization.downloadReport}
             />
           </div>
         </section>
@@ -292,7 +342,13 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
           usedWorker={sanitization.result.usedWorker}
         />
 
-        {/* Automatic CSV Column Preview */}
+        {/* Privacy Risk Analyzer & Classification Dashboard */}
+        <RiskAnalyzerPanel
+          risk={sanitization.result.risk}
+          hasText={Boolean(sanitization.rawText)}
+        />
+
+        {/* Automatic CSV Column Preview with Per-Cell Redaction Toggles */}
         {sanitization.fileKind === 'csv' &&
           sanitization.result.csvRows &&
           sanitization.result.csvRows.length > 0 && (
@@ -302,10 +358,12 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
               sanitizedCsvRows={sanitization.result.sanitizedCsvRows}
               hasCsvHeader={sanitization.result.hasCsvHeader}
               matches={sanitization.result.matches}
+              excludedIds={sanitization.excludedIds}
+              onToggleCellMatches={sanitization.toggleCsvCellExclusion}
             />
           )}
 
-        {/* Differentiating Tools Workbench */}
+        {/* Engineering Workbench */}
         <div className="space-y-4 border-t border-[var(--pg-border)] pt-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -313,7 +371,7 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
                 Engineering Workbench
               </p>
               <h2 className="font-display text-xl font-semibold tracking-tight text-[var(--pg-text-primary)]">
-                Mapping inspector &amp; detection rule sandbox
+                Mapping inspector, rule sandbox &amp; custom templates
               </h2>
             </div>
 
@@ -327,11 +385,10 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
                 role="tab"
                 aria-selected={workbenchTab === 'mappings'}
                 onClick={() => setWorkbenchTab('mappings')}
-                className={`rounded-md px-3 py-1.5 font-display text-xs font-semibold transition-colors ${
-                  workbenchTab === 'mappings'
-                    ? 'bg-[#173D30] text-[#FBFAF6] dark:bg-[#A3C1A5] dark:text-[#111713]'
-                    : 'text-[var(--pg-text-secondary)] hover:text-[var(--pg-text-primary)]'
-                }`}
+                className={`rounded-md px-3 py-1.5 font-display text-xs font-semibold transition-colors ${workbenchTab === 'mappings'
+                  ? 'bg-[#173D30] text-[#FBFAF6] dark:bg-[#A3C1A5] dark:text-[#111713]'
+                  : 'text-[var(--pg-text-secondary)] hover:text-[var(--pg-text-primary)]'
+                  }`}
               >
                 Mapping Inspector
               </button>
@@ -340,32 +397,55 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
                 role="tab"
                 aria-selected={workbenchTab === 'rules'}
                 onClick={() => setWorkbenchTab('rules')}
-                className={`rounded-md px-3 py-1.5 font-display text-xs font-semibold transition-colors ${
-                  workbenchTab === 'rules'
-                    ? 'bg-[#173D30] text-[#FBFAF6] dark:bg-[#A3C1A5] dark:text-[#111713]'
-                    : 'text-[var(--pg-text-secondary)] hover:text-[var(--pg-text-primary)]'
-                }`}
+                className={`rounded-md px-3 py-1.5 font-display text-xs font-semibold transition-colors ${workbenchTab === 'rules'
+                  ? 'bg-[#173D30] text-[#FBFAF6] dark:bg-[#A3C1A5] dark:text-[#111713]'
+                  : 'text-[var(--pg-text-secondary)] hover:text-[var(--pg-text-primary)]'
+                  }`}
               >
                 Detection Rule Explorer
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={workbenchTab === 'custom'}
+                onClick={() => setWorkbenchTab('custom')}
+                className={`rounded-md px-3 py-1.5 font-display text-xs font-semibold transition-colors ${workbenchTab === 'custom'
+                  ? 'bg-[#173D30] text-[#FBFAF6] dark:bg-[#A3C1A5] dark:text-[#111713]'
+                  : 'text-[var(--pg-text-secondary)] hover:text-[var(--pg-text-primary)]'
+                  }`}
+              >
+                Custom Rules &amp; Labels
               </button>
             </div>
           </div>
 
-          {workbenchTab === 'mappings' ? (
+          {workbenchTab === 'mappings' && (
             <PseudonymMappingInspector
               matches={sanitization.result.matches}
               replacements={sanitization.result.replacements}
               redactionMode={sanitization.redactionMode}
             />
-          ) : (
+          )}
+          {workbenchTab === 'rules' && (
             <DetectionRuleExplorer
               enabledCategories={sanitization.enabledCategories}
               onToggleCategory={sanitization.toggleCategory}
             />
           )}
+          {workbenchTab === 'custom' && (
+            <CustomRulesPanel
+              customRules={sanitization.customRules}
+              customLabels={sanitization.customLabels}
+              onAddRule={sanitization.addCustomRule}
+              onToggleRule={sanitization.toggleCustomRule}
+              onDeleteRule={sanitization.deleteCustomRule}
+              onUpdateCustomLabel={sanitization.updateCustomLabel}
+              onResetCustomLabels={sanitization.resetCustomLabels}
+            />
+          )}
         </div>
 
-        {/* Before / After Comparison */}
+        {/* Before / After Comparison Studio */}
         <div id="comparison" className="border-t border-[var(--pg-border)] pt-8">
           <BeforeAfterDiff
             originalSegments={sanitization.result.originalSegments}
@@ -375,6 +455,7 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
             onToggleSyncScroll={(enabled) =>
               sanitization.updateSettings({ syncDiffScroll: enabled })
             }
+            onCopySanitized={sanitization.handleCopySanitized}
           />
         </div>
 
@@ -411,7 +492,7 @@ export function WorkspacePage({ sanitization, onNavigate }: WorkspacePageProps) 
                 onClick={() => onNavigate('/documents')}
                 className="inline-flex items-center gap-1 text-[var(--pg-text-secondary)] hover:text-[var(--pg-text-primary)] hover:underline"
               >
-                Document library
+                Documents &amp; Reports
               </button>
             </div>
           </div>

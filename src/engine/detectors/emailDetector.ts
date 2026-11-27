@@ -18,13 +18,19 @@ export function detectEmails(text: string, prefix = 'text'): DetectionMatch[] {
       matches.push({
         id: `${prefix}-EMAIL-${start}-${end}`,
         category: 'EMAIL',
+        entityType: 'Email Address',
+        classification: 'Contact Information',
+        severity: 'MEDIUM',
         value: candidate,
         start,
         end,
         validationStatus: 'VALIDATED',
         detectionSource: 'RFC Structural Email Validator',
+        detectionMethod: 'Structural Validator',
         confidence: 'High',
+        confidenceScore: 95,
         confidenceReason: 'Valid local-part syntax, domain labels, and alphabetic TLD',
+        suggestedAction: 'PARTIAL_MASK',
       });
     }
   }

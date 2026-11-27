@@ -152,12 +152,14 @@ export function DocumentationPage({
                 to open the Command Palette from anywhere.
               </p>
               <pre className="overflow-x-auto rounded-lg border border-[var(--pg-border)] bg-[var(--pg-surface)] p-4 font-mono text-xs leading-relaxed text-[var(--pg-text-primary)]">
-{`Keyboard Shortcuts:
+                {`Keyboard Shortcuts:
   Ctrl/Cmd + K       Open Command Palette
   Alt + Shift + C    Copy Sanitized Output to Clipboard
   Alt + 1            Switch to Full Mask ([REDACTED])
   Alt + 2            Switch to Partial Mask (sh***@example.com)
   Alt + 3            Switch to Consistent Pseudonymization (USER_01)
+  Alt + 4            Switch to Replace Label ([EMAIL_ADDRESS])
+  Alt + 5            Switch to Remove (delete PII cleanly)
   Ctrl/Cmd+Shift+L   Launch interactive Support Ticket pseudonym demo`}
               </pre>
             </section>
@@ -202,9 +204,9 @@ export function DocumentationPage({
               className="scroll-mt-24 space-y-3 border-t border-[var(--pg-border)] pt-8"
             >
               <h2 className="font-display text-xl font-semibold text-[var(--pg-text-primary)]">
-                04. Redaction Modes
+                04. Five Professional Redaction Modes
               </h2>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="rounded-[10px] border border-[var(--pg-border)] bg-[var(--pg-surface)] p-4">
                   <p className="font-mono text-[11px] text-[#173D30] dark:text-[#A3C1A5]">Mode 01</p>
                   <h3 className="mt-1 font-display text-sm font-semibold text-[var(--pg-text-primary)]">
@@ -223,19 +225,40 @@ export function DocumentationPage({
                   </h3>
                   <p className="mt-1.5 text-xs leading-relaxed text-[var(--pg-text-secondary)]">
                     Preserves minimal trailing digits or host suffixes (
-                    <code>XXXX-XXXX-XXXX-1111</code>, <code>sh***@example.com</code>) for triage
-                    debugging.
+                    <code>XXXX-XXXX-XXXX-1111</code>, <code>sh***@example.com</code>) for triage.
                   </p>
                 </div>
 
                 <div className="rounded-[10px] border border-[var(--pg-border)] bg-[var(--pg-surface)] p-4">
                   <p className="font-mono text-[11px] text-[#173D30] dark:text-[#A3C1A5]">Mode 03</p>
                   <h3 className="mt-1 font-display text-sm font-semibold text-[var(--pg-text-primary)]">
+                    Replace Label
+                  </h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-[var(--pg-text-secondary)]">
+                    Replaces matches with semantic tags (<code>[EMAIL_ADDRESS]</code>,{' '}
+                    <code>[PHONE_NUMBER]</code>) customizable in the Custom Rules tab.
+                  </p>
+                </div>
+
+                <div className="rounded-[10px] border border-[var(--pg-border)] bg-[var(--pg-surface)] p-4">
+                  <p className="font-mono text-[11px] text-[#173D30] dark:text-[#A3C1A5]">Mode 04</p>
+                  <h3 className="mt-1 font-display text-sm font-semibold text-[var(--pg-text-primary)]">
+                    Remove
+                  </h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-[var(--pg-text-secondary)]">
+                    Strips matched entities directly while tightening inline spaces and preserving
+                    punctuation and line breaks.
+                  </p>
+                </div>
+
+                <div className="rounded-[10px] border border-[var(--pg-border)] bg-[var(--pg-surface)] p-4">
+                  <p className="font-mono text-[11px] text-[#173D30] dark:text-[#A3C1A5]">Mode 05</p>
+                  <h3 className="mt-1 font-display text-sm font-semibold text-[var(--pg-text-primary)]">
                     Consistent Pseudonymization
                   </h3>
                   <p className="mt-1.5 text-xs leading-relaxed text-[var(--pg-text-secondary)]">
-                    Assigns deterministic placeholders (<code>USER_01</code>, <code>PHONE_01</code>)
-                    so repeated references remain traceable without exposing raw entities.
+                    Assigns deterministic placeholders (<code>USER_01</code>, <code>PERSON_01</code>,{' '}
+                    <code>FIN_01</code>) so repeated references stay correlatable safely.
                   </p>
                 </div>
               </div>

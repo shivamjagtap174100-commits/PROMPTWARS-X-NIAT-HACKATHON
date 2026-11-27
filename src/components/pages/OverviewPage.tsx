@@ -227,6 +227,12 @@ export function OverviewPage({ onNavigate, sanitization, onTriggerUpload }: Over
                   </dd>
                 </div>
                 <div className="flex items-baseline justify-between border-b border-[var(--pg-border)] pb-2">
+                  <dt className="text-[var(--pg-text-secondary)]">Document exposure risk</dt>
+                  <dd className="font-mono text-sm font-semibold tabular-nums text-[var(--pg-text-primary)]">
+                    {result.risk.overallRiskScore}/100 ({result.risk.riskLevel})
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between border-b border-[var(--pg-border)] pb-2">
                   <dt className="text-[var(--pg-text-secondary)]">Last scan status</dt>
                   <dd className="font-mono text-xs text-[var(--pg-text-primary)]">{statusMessage}</dd>
                 </div>
@@ -251,7 +257,7 @@ export function OverviewPage({ onNavigate, sanitization, onTriggerUpload }: Over
             <h2 className="mt-1 font-display text-base font-semibold text-[var(--pg-text-primary)]">
               Supported category rules
             </h2>
-            <ul className="mt-4 divide-y divide-[var(--pg-border)]">
+            <ul className="mt-4 max-h-64 divide-y divide-[var(--pg-border)] overflow-y-auto pr-1">
               {CATEGORY_ORDER.map((category) => {
                 const meta = CATEGORY_META[category];
                 const enabled = enabledCategories[category];

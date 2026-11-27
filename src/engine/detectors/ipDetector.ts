@@ -18,13 +18,19 @@ export function detectIps(text: string, prefix = 'text'): DetectionMatch[] {
       matches.push({
         id: `${prefix}-IP-${start}-${end}`,
         category: 'IP',
+        entityType: 'IPv4 Address',
+        classification: 'Digital Credentials',
+        severity: 'MEDIUM',
         value: candidate,
         start,
         end,
         validationStatus: 'VALIDATED',
         detectionSource: 'Strict IPv4 Octet Validator',
+        detectionMethod: 'Structural Validator',
         confidence: 'High',
+        confidenceScore: 93,
         confidenceReason: 'All 4 dotted-decimal octets verified within 0–255 bounds',
+        suggestedAction: 'PARTIAL_MASK',
       });
     }
   }
@@ -53,13 +59,19 @@ export function detectIps(text: string, prefix = 'text'): DetectionMatch[] {
       matches.push({
         id: `${prefix}-IP-${start}-${end}`,
         category: 'IP',
+        entityType: 'IPv6 Address',
+        classification: 'Digital Credentials',
+        severity: 'MEDIUM',
         value: candidate,
         start,
         end,
         validationStatus: 'VALIDATED',
         detectionSource: 'Strict IPv6 Structure Validator',
+        detectionMethod: 'Structural Validator',
         confidence: 'High',
+        confidenceScore: 94,
         confidenceReason: 'Verified 128-bit hexadecimal / compressed :: IPv6 structure',
+        suggestedAction: 'PARTIAL_MASK',
       });
     }
   }

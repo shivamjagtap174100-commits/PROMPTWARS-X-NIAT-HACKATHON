@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import { useEffect } from 'react';
-import type { SanitizationSettings } from '../../types/privacy';
+import type { SanitizationSettings, SensitivityLevel } from '../../types/privacy';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -57,6 +57,27 @@ export function SettingsPanel({
         </div>
 
         <div className="mt-5 space-y-5">
+          <div>
+            <label
+              htmlFor="sensitivity-select"
+              className="block font-display text-sm font-medium text-[var(--pg-text-primary)]"
+            >
+              Detection sensitivity
+            </label>
+            <p className="mt-0.5 text-xs text-[var(--pg-text-secondary)]">
+              Strict mode adds column-header person NER and flags non-credential HTTP/HTTPS URLs
+            </p>
+            <select
+              id="sensitivity-select"
+              value={settings.sensitivity}
+              onChange={(e) => onUpdateSettings({ sensitivity: e.target.value as SensitivityLevel })}
+              className="mt-2 h-10 w-full rounded-lg border border-[var(--pg-border)] bg-[var(--pg-bg)] px-3 font-mono text-xs text-[var(--pg-text-primary)]"
+            >
+              <option value="BALANCED">Balanced (Recommended — low false positives)</option>
+              <option value="STRICT">Strict (Column-aware Person NER + all URLs)</option>
+            </select>
+          </div>
+
           <div>
             <label
               htmlFor="debounce-select"
@@ -149,12 +170,14 @@ export function SettingsPanel({
             <p className="font-display font-medium text-[var(--pg-text-primary)]">
               Keyboard shortcuts
             </p>
-            <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[11px] text-[var(--pg-text-secondary)]">
-              <span>Ctrl/Cmd + K → Command Palette</span>
-              <span>Alt + Shift + C → Copy Sanitized</span>
+            <div className="mt-2 grid grid-cols-2 gap-1.5 font-mono text-[11px] text-[var(--pg-text-secondary)]">
+              <span>Ctrl/Cmd + K → Palette</span>
+              <span>Alt + Shift + C → Copy</span>
               <span>Alt + 1 → Full Mask</span>
               <span>Alt + 2 → Partial Mask</span>
               <span>Alt + 3 → Pseudonyms</span>
+              <span>Alt + 4 → Replace Label</span>
+              <span>Alt + 5 → Remove</span>
               <span>Ctrl/Cmd + Shift + L → Demo</span>
             </div>
           </div>

@@ -191,6 +191,9 @@ export function App() {
         onCopySanitized={sanitization.handleCopySanitized}
         onDownloadTxt={sanitization.handleDownloadTxt}
         onDownloadCsv={sanitization.handleDownloadCsv}
+        onDownloadReport={sanitization.downloadReport}
+        onUndo={sanitization.undo}
+        onRedo={sanitization.redo}
         onClearDocument={sanitization.clearDocument}
         onToggleTheme={toggleTheme}
         onOpenSettings={() => setSettingsOpen(true)}

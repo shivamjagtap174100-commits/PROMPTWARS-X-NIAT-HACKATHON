@@ -18,14 +18,20 @@ export function detectCreditCards(text: string, prefix = 'text'): DetectionMatch
       matches.push({
         id: `${prefix}-CREDIT_CARD-${start}-${end}`,
         category: 'CREDIT_CARD',
+        entityType: 'Payment Card (Luhn)',
+        classification: 'Financial Information',
+        severity: 'CRITICAL',
         value: candidate,
         start,
         end,
         validationStatus: 'VALIDATED',
         detectionSource: 'ISO/IEC 7812 Luhn Checksum Validator',
+        detectionMethod: 'Checksum (Luhn Mod-10)',
         confidence: 'High',
+        confidenceScore: 97,
         confidenceReason:
           'Passed 13–19 digit length bounds and ISO/IEC 7812 Luhn mod-10 checksum (format check only)',
+        suggestedAction: 'PARTIAL_MASK',
       });
     }
   }

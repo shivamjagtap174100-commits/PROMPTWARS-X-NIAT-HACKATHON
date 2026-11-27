@@ -1,4 +1,5 @@
-import { useMemo, useRef } from 'react';
+import { Copy, Maximize2, Minimize2 } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import type { DiffSegment, RedactionMode } from '../../types/privacy';
 import { CATEGORY_META, REDACTION_MODE_META } from '../../utils/categoryTheme';
 
@@ -8,6 +9,7 @@ interface BeforeAfterDiffProps {
   redactionMode: RedactionMode;
   syncScroll: boolean;
   onToggleSyncScroll: (enabled: boolean) => void;
+  onCopySanitized?: () => Promise<boolean>;
 }
 
 export function BeforeAfterDiff({
@@ -16,10 +18,12 @@ export function BeforeAfterDiff({
   redactionMode,
   syncScroll,
   onToggleSyncScroll,
+  onCopySanitized,
 }: BeforeAfterDiffProps) {
   const origRef = useRef<HTMLDivElement>(null);
   const sanRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef<'orig' | 'san' | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const diffSummary = useMemo(() => {
     let changedCount = 0;
@@ -59,7 +63,14 @@ export function BeforeAfterDiff({
   };
 
   return (
-    <section aria-labelledby="before-after-heading" className="space-y-4">
+    <section
+      aria-labelledby="before-after-heading"
+      className={
+        expanded
+          ? 'fixed inset-0 z-50 flex flex-col bg-[var(--pg-bg)] p-4 sm:p-6'
+          : 'space-y-4'
+      }
+    >
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#173D30] dark:text-[#A3C1A5]">
@@ -82,18 +93,18 @@ export function BeforeAfterDiff({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="hidden flex-wrap items-center gap-3 text-xs text-[var(--pg-text-secondary)] xl:flex">
-            {Object.entries(CATEGORY_META).map(([key, meta]) => (
-              <span key={key} className="inline-flex items-center gap-1.5">
-                <span
-                  aria-hidden="true"
-                  className={`h-2 w-2 rounded-full ${meta.dotColorClass}`}
-                />
-                <span>{meta.shortLabel}</span>
-              </span>
-            ))}
-          </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {onCopySanitized && (
+            <button
+              type="button"
+              onClick={() => void onCopySanitized()}
+              disabled={sanitizedSegments.length === 0}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-surface)] px-3 font-display text-xs font-medium text-[var(--pg-text-primary)] transition-colors hover:border-[var(--pg-border-strong)] disabled:opacity-40"
+            >
+              <Copy className="h-3.5 w-3.5" strokeWidth={1.85} aria-hidden="true" />
+              Copy sanitized
+            </button>
+          )}
 
           <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-surface)] px-3 font-display text-xs font-medium text-[var(--pg-text-primary)]">
             <input
@@ -104,11 +115,49 @@ export function BeforeAfterDiff({
             />
             Synchronize scroll
           </label>
+
+          <button
+            type="button"
+            onClick={() => setExpanded((prev) => !prev)}
+            aria-label={expanded ? 'Exit expanded comparison' : 'Expand comparison view'}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[var(--pg-border)] bg-[var(--pg-surface)] px-3 font-display text-xs font-medium text-[var(--pg-text-primary)] transition-colors hover:border-[var(--pg-border-strong)]"
+          >
+            {expanded ? (
+              <>
+                <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.85} aria-hidden="true" />
+                Collapse
+              </>
+            ) : (
+              <>
+                <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.85} aria-hidden="true" />
+                Expand
+              </>
+            )}
+          </button>
         </div>
       </div>
 
+      {/* Category Color Legend */}
+      <div className="hidden flex-wrap items-center gap-3 text-[11px] text-[var(--pg-text-secondary)] xl:flex">
+        {Object.entries(CATEGORY_META)
+          .slice(0, 12)
+          .map(([key, meta]) => (
+            <span key={key} className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden="true"
+                className={`h-2 w-2 rounded-full ${meta.dotColorClass}`}
+              />
+              <span>{meta.shortLabel}</span>
+            </span>
+          ))}
+      </div>
+
       {/* Unified Framed 2-Column Editorial Diff */}
-      <div className="pg-shadow-card grid divide-y divide-[var(--pg-border)] overflow-hidden rounded-[10px] border border-[var(--pg-border)] lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+      <div
+        className={`pg-shadow-card grid divide-y divide-[var(--pg-border)] overflow-hidden rounded-[10px] border border-[var(--pg-border)] lg:grid-cols-2 lg:divide-x lg:divide-y-0 ${
+          expanded ? 'mt-4 flex-1' : ''
+        }`}
+      >
         {/* Left: Original Document */}
         <div className="flex flex-col bg-[var(--pg-surface)] text-[var(--pg-text-primary)]">
           <div className="flex items-center justify-between border-b border-[var(--pg-border)] px-5 py-3">
@@ -124,7 +173,9 @@ export function BeforeAfterDiff({
             ref={origRef}
             onScroll={() => handleScroll('orig')}
             data-testid="diff-original-pane"
-            className="h-72 overflow-auto p-5 font-mono text-xs leading-6 whitespace-pre-wrap break-words"
+            className={`${
+              expanded ? 'flex-1' : 'h-72'
+            } overflow-auto p-5 font-mono text-xs leading-6 whitespace-pre-wrap break-words`}
           >
             {originalSegments.length === 0 ? (
               <span className="text-[var(--pg-text-muted)]">
@@ -172,7 +223,9 @@ export function BeforeAfterDiff({
             ref={sanRef}
             onScroll={() => handleScroll('san')}
             data-testid="diff-sanitized-pane"
-            className="h-72 overflow-auto p-5 font-mono text-xs leading-6 whitespace-pre-wrap break-words"
+            className={`${
+              expanded ? 'flex-1' : 'h-72'
+            } overflow-auto p-5 font-mono text-xs leading-6 whitespace-pre-wrap break-words`}
           >
             {sanitizedSegments.length === 0 ? (
               <span className="text-[#829782]">
@@ -184,6 +237,8 @@ export function BeforeAfterDiff({
                   return <span key={idx}>{seg.text}</span>;
                 }
                 const meta = CATEGORY_META[seg.category];
+                const displayText =
+                  seg.text || (redactionMode === 'REMOVE' && !seg.excluded ? '[removed]' : '');
                 return (
                   <mark
                     key={`${seg.matchId || idx}`}
@@ -195,10 +250,12 @@ export function BeforeAfterDiff({
                     className={`rounded-xs px-1 py-0.5 font-medium transition-colors ${
                       seg.excluded
                         ? 'border border-[#D6B879]/45 bg-transparent text-[#D6B879]'
-                        : meta.replacementHighlightClasses
+                        : redactionMode === 'REMOVE' && !seg.text
+                          ? 'border border-[#DF7B73]/40 bg-[#B64B43]/30 text-[#FAD7D4] line-through'
+                          : meta.replacementHighlightClasses
                     }`}
                   >
-                    {seg.text}
+                    {displayText}
                   </mark>
                 );
               })

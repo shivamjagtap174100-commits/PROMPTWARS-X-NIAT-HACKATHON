@@ -3,6 +3,7 @@ import {
   Copy,
   Database,
   Download,
+  FileCheck2,
   Files,
   FileText,
   FileUp,
@@ -11,12 +12,14 @@ import {
   LogOut,
   Moon,
   Play,
+  Redo2,
   ScanSearch,
   Search,
   Settings,
   ShieldCheck,
   Sun,
   Trash2,
+  Undo2,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -46,6 +49,9 @@ interface CommandPaletteProps {
   onCopySanitized: () => Promise<boolean>;
   onDownloadTxt: () => boolean;
   onDownloadCsv: () => boolean;
+  onDownloadReport?: (format: 'json' | 'md') => boolean;
+  onUndo?: () => boolean;
+  onRedo?: () => boolean;
   onClearDocument: () => void;
   onToggleTheme: () => void;
   onOpenSettings: () => void;
@@ -65,6 +71,9 @@ export function CommandPalette({
   onCopySanitized,
   onDownloadTxt,
   onDownloadCsv,
+  onDownloadReport,
+  onUndo,
+  onRedo,
   onClearDocument,
   onToggleTheme,
   onOpenSettings,
@@ -105,7 +114,7 @@ export function CommandPalette({
       {
         id: 'nav-documents',
         group: 'Navigation',
-        label: 'Open Documents & Session Library',
+        label: 'Open Documents & Reports',
         hint: '/documents',
         icon: Files,
         action: goAndClose('/documents'),
@@ -146,7 +155,7 @@ export function CommandPalette({
         id: 'action-load-sample',
         group: 'Workspace & Scan',
         label: 'Load Sample',
-        hint: '6 PII classes',
+        hint: 'Benchmark',
         icon: Database,
         action: runAndClose(() => {
           onLoadSampleData();
@@ -197,6 +206,28 @@ export function CommandPalette({
           onChangeMode('PSEUDONYM');
         }),
       },
+      {
+        id: 'mode-replace',
+        group: 'Workspace & Scan',
+        label: 'Mode: Replace Label ([ENTITY_TYPE])',
+        hint: 'Alt+4',
+        icon: Lock,
+        action: runAndClose(() => {
+          onNavigate('/workspace');
+          onChangeMode('REPLACE');
+        }),
+      },
+      {
+        id: 'mode-remove',
+        group: 'Workspace & Scan',
+        label: 'Mode: Remove PII',
+        hint: 'Alt+5',
+        icon: Lock,
+        action: runAndClose(() => {
+          onNavigate('/workspace');
+          onChangeMode('REMOVE');
+        }),
+      },
       ...SAMPLE_PRESETS.map((preset) => ({
         id: `sample-${preset.id}`,
         group: 'Workspace & Scan' as const,
@@ -208,6 +239,28 @@ export function CommandPalette({
           onNavigate('/workspace');
         }),
       })),
+      ...(onUndo
+        ? [
+            {
+              id: 'history-undo',
+              group: 'Exports & Controls' as const,
+              label: 'Undo last workspace change',
+              icon: Undo2,
+              action: runAndClose(() => void onUndo()),
+            },
+          ]
+        : []),
+      ...(onRedo
+        ? [
+            {
+              id: 'history-redo',
+              group: 'Exports & Controls' as const,
+              label: 'Redo last workspace change',
+              icon: Redo2,
+              action: runAndClose(() => void onRedo()),
+            },
+          ]
+        : []),
       {
         id: 'export-copy',
         group: 'Exports & Controls',
@@ -232,6 +285,26 @@ export function CommandPalette({
         icon: Download,
         action: runAndClose(() => void onDownloadCsv()),
       },
+      ...(onDownloadReport
+        ? [
+            {
+              id: 'export-report-md',
+              group: 'Exports & Controls' as const,
+              label: 'Export sanitization compliance report (.md)',
+              hint: '.md',
+              icon: FileCheck2,
+              action: runAndClose(() => void onDownloadReport('md')),
+            },
+            {
+              id: 'export-report-json',
+              group: 'Exports & Controls' as const,
+              label: 'Export sanitization compliance report (.json)',
+              hint: '.json',
+              icon: FileCheck2,
+              action: runAndClose(() => void onDownloadReport('json')),
+            },
+          ]
+        : []),
       {
         id: 'clear-doc',
         group: 'Exports & Controls',
@@ -274,6 +347,9 @@ export function CommandPalette({
     onCopySanitized,
     onDownloadTxt,
     onDownloadCsv,
+    onDownloadReport,
+    onUndo,
+    onRedo,
     onClearDocument,
     onToggleTheme,
     onOpenSettings,

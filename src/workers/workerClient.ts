@@ -1,10 +1,13 @@
 import { DEFAULT_ENABLED_CATEGORIES } from '../engine/detectors/detectAll';
 import { runSanitizationPipeline } from '../engine/pipeline';
 import type {
+  CustomLabelsMap,
+  CustomRuleDefinition,
   EnabledCategoriesMap,
   FileKind,
   RedactionMode,
   SanitizationResult,
+  SensitivityLevel,
   WorkerRequestPayload,
   WorkerResponsePayload,
 } from '../types/privacy';
@@ -43,6 +46,9 @@ export async function sanitizeDocumentAsync(params: {
   preserveCsvHeader: boolean;
   workerThresholdChars: number;
   enabledCategories?: EnabledCategoriesMap;
+  sensitivity?: SensitivityLevel;
+  customRules?: CustomRuleDefinition[];
+  customLabels?: CustomLabelsMap;
 }): Promise<SanitizationResult> {
   const {
     inputText,
@@ -52,7 +58,12 @@ export async function sanitizeDocumentAsync(params: {
     preserveCsvHeader,
     workerThresholdChars,
     enabledCategories = DEFAULT_ENABLED_CATEGORIES,
+    sensitivity = 'BALANCED',
+    customRules = [],
+    customLabels = {},
   } = params;
+
+  const pipelineOpts = { sensitivity, customRules, customLabels };
 
   const shouldUseWorker =
     inputText.length >= workerThresholdChars && typeof Worker !== 'undefined';
@@ -65,7 +76,8 @@ export async function sanitizeDocumentAsync(params: {
       excludedIds,
       preserveCsvHeader,
       false,
-      enabledCategories
+      enabledCategories,
+      pipelineOpts
     );
   }
 
@@ -78,7 +90,8 @@ export async function sanitizeDocumentAsync(params: {
       excludedIds,
       preserveCsvHeader,
       false,
-      enabledCategories
+      enabledCategories,
+      pipelineOpts
     );
   }
 
@@ -100,7 +113,8 @@ export async function sanitizeDocumentAsync(params: {
             excludedIds,
             preserveCsvHeader,
             false,
-            enabledCategories
+            enabledCategories,
+            pipelineOpts
           )
         );
       }
@@ -116,7 +130,8 @@ export async function sanitizeDocumentAsync(params: {
           excludedIds,
           preserveCsvHeader,
           false,
-          enabledCategories
+          enabledCategories,
+          pipelineOpts
         )
       );
     };
@@ -137,6 +152,9 @@ export async function sanitizeDocumentAsync(params: {
       excludedIds,
       preserveCsvHeader,
       enabledCategories,
+      sensitivity,
+      customRules,
+      customLabels,
     };
     worker.postMessage(payload);
   });

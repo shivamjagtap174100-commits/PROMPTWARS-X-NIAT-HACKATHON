@@ -1,9 +1,14 @@
 import type { DetectionMatch, EntityCategory } from '../types/privacy';
 import { detectAadhaar } from './detectors/aadhaarDetector';
 import { detectCreditCards } from './detectors/creditCardDetector';
+import { detectDigitalSecrets } from './detectors/digitalSecretDetector';
 import { detectEmails } from './detectors/emailDetector';
+import { detectFinancialIds } from './detectors/financialDetector';
+import { detectGovIds } from './detectors/govIdDetector';
 import { detectIps } from './detectors/ipDetector';
+import { detectLocations } from './detectors/locationDetector';
 import { detectPans } from './detectors/panDetector';
+import { detectDobAndAge, detectPersonNames } from './detectors/personalInfoDetector';
 import { detectPhones } from './detectors/phoneDetector';
 
 export interface DetectionRuleDefinition {
@@ -71,6 +76,60 @@ export const DETECTION_RULE_DEFINITIONS: DetectionRuleDefinition[] = [
     validSamples: ['4111-1111-1111-1111', '5500000000000004'],
     rejectedSamples: ['4111-1111-1111-1112', '9812345678901234'],
   },
+  {
+    category: 'PERSON_NAME',
+    modulePath: 'src/engine/detectors/personalInfoDetector.ts',
+    validatorName: 'Local Heuristic Person NER',
+    patternSummary: 'Identity-labeled full names & honored titles (Mr./Ms./Dr./Shri/Smt)',
+    validationScope: 'Requires explicit context or Strict column NER to suppress false positives',
+    validSamples: ['Customer Name: Aarav Kulkarni', 'Dr. Ananya Deshmukh'],
+    rejectedSamples: ['Environment: prod-ap-south-1', 'Sahyadri Systems Pvt.'],
+  },
+  {
+    category: 'DOB_AGE',
+    modulePath: 'src/engine/detectors/personalInfoDetector.ts',
+    validatorName: 'Demographic Context Detector',
+    patternSummary: 'DOB / Date of Birth, explicit Age fields, and Gender attributes',
+    validationScope: 'Anchored to demographic keywords so timestamps/build versions stay untouched',
+    validSamples: ['DOB: 14/05/1994', 'Age: 31 yrs', 'Gender: Female'],
+    rejectedSamples: ['2026-11-27', 'Batch Qty: 4500'],
+  },
+  {
+    category: 'GOV_ID',
+    modulePath: 'src/engine/detectors/govIdDetector.ts',
+    validatorName: 'Passport, EPIC, DL & SSN Validator',
+    patternSummary: 'Passport ([A-PR-WY][1-9]\\d{6}), Voter EPIC, DL & XXX-XX-XXXX national formats',
+    validationScope: 'Syntax & keyword anchoring prevents random ticket codes from matching',
+    validSamples: ['Passport No: K4829103', 'Voter ID: ABC1234567'],
+    rejectedSamples: ['SUP-44920', '000-12-3456'],
+  },
+  {
+    category: 'FINANCIAL_ID',
+    modulePath: 'src/engine/detectors/financialDetector.ts',
+    validatorName: 'IFSC, UPI & Bank Account Detector',
+    patternSummary: 'RBI IFSC ([A-Z]{4}0[A-Z0-9]{6}), NPCI UPI handles, and labeled Bank/IBAN numbers',
+    validationScope: 'Validates PSP handles and bank account context anchors locally',
+    validSamples: ['HDFC0001234', 'rahul@okaxis', 'Account No: 918273645512'],
+    rejectedSamples: ['INV2026884', 'test@localhost'],
+  },
+  {
+    category: 'DIGITAL_SECRET',
+    modulePath: 'src/engine/detectors/digitalSecretDetector.ts',
+    validatorName: 'API Key, Password & Query Secret Scanner',
+    patternSummary: 'API token prefixes (sk_, ghp_, AKIA, AIza), JWTs, passwords & auth query URLs',
+    validationScope: 'Never logs extracted secret values in audit or diagnostic telemetry',
+    validSamples: ['api_key=sk_live_abc123def456ghi789', 'https://app.io/auth?token=secret9981'],
+    rejectedSamples: ['api_key=test', 'SLA=140ms'],
+  },
+  {
+    category: 'LOCATION_ADDRESS',
+    modulePath: 'src/engine/detectors/locationDetector.ts',
+    validatorName: 'Address & Postal PIN Context Detector',
+    patternSummary: 'Street/mailing address labels, Indian PIN / ZIP codes & City-PIN pairs',
+    validationScope: 'Requires address/postal keyword or city pairing so quantities are ignored',
+    validSamples: ['PIN Code: 411001', 'Address: Flat 402, MG Road, Pune'],
+    rejectedSamples: ['Batch Qty: 4500', 'INR 4,290'],
+  },
 ];
 
 export function inspectInputWithRule(
@@ -91,5 +150,19 @@ export function inspectInputWithRule(
       return detectAadhaar(sampleText, 'sandbox');
     case 'CREDIT_CARD':
       return detectCreditCards(sampleText, 'sandbox');
+    case 'PERSON_NAME':
+      return detectPersonNames(sampleText, 'sandbox', 'BALANCED');
+    case 'DOB_AGE':
+      return detectDobAndAge(sampleText, 'sandbox');
+    case 'GOV_ID':
+      return detectGovIds(sampleText, 'sandbox');
+    case 'FINANCIAL_ID':
+      return detectFinancialIds(sampleText, 'sandbox');
+    case 'DIGITAL_SECRET':
+      return detectDigitalSecrets(sampleText, 'sandbox', 'BALANCED');
+    case 'LOCATION_ADDRESS':
+      return detectLocations(sampleText, 'sandbox');
+    case 'CUSTOM':
+      return [];
   }
 }

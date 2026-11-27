@@ -302,6 +302,69 @@ export function PrivacyCentrePage({ sanitization, onNavigate }: PrivacyCentrePag
           usedWorker={sanitization.result.usedWorker}
           redactionMode={sanitization.redactionMode}
         />
+
+        {/* Storage & Channel Proof Verification Matrix */}
+        <section
+          aria-labelledby="storage-audit-heading"
+          className="pg-shadow-card rounded-[10px] border border-[var(--pg-border)] bg-[var(--pg-surface)] p-5 sm:p-6"
+        >
+          <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#173D30] dark:text-[#A3C1A5]">
+            Client-side boundary audit
+          </p>
+          <h2
+            id="storage-audit-heading"
+            className="mt-0.5 font-display text-base font-semibold text-[var(--pg-text-primary)]"
+          >
+            Verified runtime channel &amp; storage disposition
+          </h2>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-[var(--pg-border)] font-mono text-[11px] uppercase text-[var(--pg-text-secondary)]">
+                <tr>
+                  <th className="py-2 pr-4 font-medium">Channel / Storage</th>
+                  <th className="py-2 pr-4 font-medium">Observed State</th>
+                  <th className="py-2 font-medium">Data Scope</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--pg-border)]">
+                <tr>
+                  <td className="py-2.5 pr-4 font-mono">fetch / XHR / Beacon</td>
+                  <td className="py-2.5 pr-4 font-mono text-[#367A55] dark:text-[#A3C1A5]">
+                    {telemetry.apiRequestCount} requests
+                  </td>
+                  <td className="py-2.5 text-[var(--pg-text-secondary)]">
+                    No document upload or remote PII inference calls
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2.5 pr-4 font-mono">sessionStorage</td>
+                  <td className="py-2.5 pr-4 font-mono text-[#367A55] dark:text-[#A3C1A5]">
+                    {telemetry.sessionStorageKeys} keys
+                  </td>
+                  <td className="py-2.5 text-[var(--pg-text-secondary)]">Unused</td>
+                </tr>
+                <tr>
+                  <td className="py-2.5 pr-4 font-mono">localStorage</td>
+                  <td className="py-2.5 pr-4 font-mono text-[var(--pg-text-primary)]">
+                    {telemetry.persistedMetadataKeys} metadata keys
+                  </td>
+                  <td className="py-2.5 text-[var(--pg-text-secondary)]">
+                    Preferences, theme &amp; non-PII summaries only (raw text stripped)
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-2.5 pr-4 font-mono">Document &amp; Pseudonym Maps</td>
+                  <td className="py-2.5 pr-4 font-mono text-[#367A55] dark:text-[#A3C1A5]">
+                    Volatile JS / Worker RAM
+                  </td>
+                  <td className="py-2.5 text-[var(--pg-text-secondary)]">
+                    Cleared immediately on Clear, Logout, or tab close
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
       <footer className="border-t border-[var(--pg-border)] py-7">
