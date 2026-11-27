@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
-    base: command === 'build' ? env.VITE_BASE_PATH || '/PROMPTWARS-X-NIAT-HACKATHON/' : '/',
+    base: command === 'build' ? env.VITE_BASE_PATH || '/' : '/',
     plugins: [react(), tailwindcss()],
     worker: {
       format: 'es',
